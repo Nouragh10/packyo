@@ -20,6 +20,7 @@ import {
   firebaseListEntries,
   normalizeActivityList,
   resolveFirebaseActivityIndex,
+  resolveUniqueFirebaseActivitySlotIndex,
   resolveFirebaseDayEntry,
 } from "../lib/firebase-lists";
 
@@ -58,6 +59,23 @@ function activityTimeToMinutes(value: unknown): number {
   if (match[3].toUpperCase() === "PM" && hours !== 12) hours += 12;
   if (match[3].toUpperCase() === "AM" && hours === 12) hours = 0;
   return hours * 60 + minutes;
+}
+
+function activityTimeGuidance(value: unknown): string {
+  const minutes = activityTimeToMinutes(value);
+  if (minutes < 11 * 60) {
+    return "This is a morning slot: choose breakfast, coffee, a market, a walk, or an attraction that is confirmed open in the morning. Do not choose nightlife, dinner, or a venue that opens later.";
+  }
+  if (minutes < 14 * 60) {
+    return "This is a midday slot: choose lunch, a market, a museum, a tour, or another venue confirmed open around midday.";
+  }
+  if (minutes < 18 * 60) {
+    return "This is an afternoon slot: choose an attraction, tour, shopping, relaxation, or another venue confirmed open in the afternoon.";
+  }
+  if (minutes < 22 * 60) {
+    return "This is an evening slot: choose dinner, a show, a sunset activity, or an evening venue confirmed open at this time.";
+  }
+  return "This is a late-night slot: choose nightlife, a late venue, or another activity explicitly confirmed open this late. Do not choose daytime-only attractions.";
 }
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -1409,6 +1427,7 @@ router.post("/redo-activity", async (req: Request, res: Response): Promise<void>
   // Some itineraries created by earlier mobile builds do not persist city per
   // day. A destination-level redo is still valid, so use it as the fallback.
   const resolvedCity = city?.trim() || resolvedDestination;
+  const timeGuidance = activityTimeGuidance(activity?.time);
 
   if (!activity || !resolvedCity || !resolvedDestination || !redoType) {
     res.status(400).json({ error: "Missing required fields." });
@@ -1469,6 +1488,8 @@ ${task}
 
 RULES:
 - Keep the same time slot (${activity.time}).
+- ${timeGuidance}
+- Verify the venue is actually open at or before ${activity.time}; operating on the same date but opening later is not acceptable.
 - The venue must be physically located in ${city} — not a different suburb, town, or region.
 - Must be currently open and operating (confirmed by web search).
 - Prefer iconic, well-known, long-established places (10+ years) over trendy or obscure ones.
@@ -1647,6 +1668,7 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
       operation,
       dayNumber,
       activityId,
+      activityIndex,
       targetActivity,
       activity,
     } = req.body as {
@@ -1654,6 +1676,7 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
       operation?: "add" | "update" | "delete";
       dayNumber?: number;
       activityId?: string;
+      activityIndex?: number;
       targetActivity?: Record<string, unknown>;
       activity?: Record<string, unknown>;
     };
@@ -1717,7 +1740,7 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
       return;
     }
     const requestedDayNumber = Number(dayNumber);
-    const matchingDay = resolveFirebaseDayEntry(dayEntries, requestedDayNumber);
+    let matchingDay = resolveFirebaseDayEntry(dayEntries, requestedDayNumber);
     if (!matchingDay) {
       req.log.warn(
         {
@@ -1734,6 +1757,27 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
       return;
     }
 
+    if (operation === "update" || operation === "delete") {
+      const requestedActivities = normalizeActivityList(matchingDay.value.activities);
+      const requestedActivityIndex = resolveFirebaseActivityIndex(
+        requestedActivities,
+        activityId,
+        targetActivity,
+      );
+      if (requestedActivityIndex === -1) {
+        const matchingActivityDays = dayEntries.flatMap((entry, index) => {
+          const activities = normalizeActivityList(entry.value.activities);
+          const resolvedIndex = resolveFirebaseActivityIndex(activities, activityId, targetActivity);
+          return resolvedIndex === -1
+            ? []
+            : [{ ...entry, canonicalDayNumber: index + 1 }];
+        });
+        if (matchingActivityDays.length === 1) {
+          matchingDay = matchingActivityDays[0]!;
+        }
+      }
+    }
+
     if (Number(matchingDay.value.dayNumber) !== matchingDay.canonicalDayNumber) {
       await tripRef
         .child(`itinerary/days/${matchingDay.key}/dayNumber`)
@@ -1741,7 +1785,13 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
     }
     const activitiesRef = tripRef.child(`itinerary/days/${matchingDay.key}/activities`);
     const newActivityId = operation === "add" ? randomUUID() : null;
-    const transaction = await activitiesRef.transaction((currentActivities) => {
+    let lastResolution = {
+      activityCount: 0,
+      matchedIndex: -1,
+      providedIndex: Number.isInteger(Number(activityIndex)) ? Number(activityIndex) : null,
+      slotIndex: -1,
+    };
+    const applyActivityMutation = (currentActivities: unknown) => {
       const activities = normalizeActivityList(currentActivities);
 
       if (operation === "add") {
@@ -1768,7 +1818,27 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
         if (insertAt === -1) activities.push(newActivity);
         else activities.splice(insertAt, 0, newActivity);
       } else {
-        const index = resolveFirebaseActivityIndex(activities, activityId, targetActivity);
+        let index = resolveFirebaseActivityIndex(activities, activityId, targetActivity);
+        const matchedIndex = index;
+        if (
+          index === -1 &&
+          Number.isInteger(Number(activityIndex)) &&
+          Number(activityIndex) >= 0 &&
+          Number(activityIndex) < activities.length
+        ) {
+          index = Number(activityIndex);
+        }
+        let slotIndex = -1;
+        if (index === -1) {
+          slotIndex = resolveUniqueFirebaseActivitySlotIndex(activities, targetActivity);
+          index = slotIndex;
+        }
+        lastResolution = {
+          activityCount: activities.length,
+          matchedIndex,
+          providedIndex: Number.isInteger(Number(activityIndex)) ? Number(activityIndex) : null,
+          slotIndex,
+        };
         if (index === -1) return;
         if (operation === "delete") {
           activities.splice(index, 1);
@@ -1785,9 +1855,44 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
       }
 
       return activities;
-    });
+    };
+
+    // RTDB can invoke a transaction against a cold local child cache before it
+    // has loaded the server value. Update/delete would see that temporary null
+    // as an empty list and abort. Reading this exact child first ensures the
+    // scoped transaction starts from the current Firebase activity list.
+    await activitiesRef.get();
+    let transaction = await activitiesRef.transaction(applyActivityMutation);
+    if (!transaction.committed && operation !== "add") {
+      await activitiesRef.get();
+      transaction = await activitiesRef.transaction(applyActivityMutation);
+      if (transaction.committed) {
+        req.log.warn(
+          { tripId, dayNumber, operation },
+          "Recovered a cold-cache activity transaction after a fresh read",
+        );
+      }
+    }
 
     let committed = transaction.committed;
+    if (!committed && operation !== "add") {
+      // In this Firebase runtime, a transaction on a cold array child can
+      // receive null even after an explicit get(), causing a valid update or
+      // delete to abort before seeing server data. Resolve once more against a
+      // fresh snapshot and persist only this day's activity list. The resolver
+      // still rejects missing or ambiguous targets, so this cannot silently
+      // mutate a different activity.
+      const latestSnapshot = await activitiesRef.get();
+      const recoveredActivities = applyActivityMutation(latestSnapshot.val());
+      if (recoveredActivities) {
+        await activitiesRef.set(recoveredActivities);
+        committed = true;
+        req.log.warn(
+          { tripId, dayNumber, operation },
+          "Recovered an aborted activity transaction from a fresh Firebase snapshot",
+        );
+      }
+    }
     if (!committed && operation === "add") {
       // A new activity has no stale target to conflict with. Some legacy
       // Firebase array shapes can still abort a transaction before committing,
@@ -1824,6 +1929,18 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
     }
 
     if (!committed) {
+      req.log.warn(
+        {
+          tripId,
+          requestedDayNumber,
+          resolvedDayKey: matchingDay.key,
+          operation,
+          hasActivityId: Boolean(activityId),
+          hasTargetActivity: Boolean(targetActivity),
+          ...lastResolution,
+        },
+        "Could not resolve selected activity during Firebase transaction",
+      );
       res.status(409).json({
         error: "The selected activity is no longer available. Please refresh and try again.",
       });
