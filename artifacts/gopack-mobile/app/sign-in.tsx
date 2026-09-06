@@ -1,8 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import * as AppleAuthentication from "expo-apple-authentication";
 import * as AuthSession from "expo-auth-session";
 import * as Google from "expo-auth-session/providers/google";
-import * as Crypto from "expo-crypto";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import { useRouter } from "expo-router";
@@ -21,8 +19,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   auth,
-  signInGuest,
-  signInWithAppleCredential,
   signInWithEmail,
   signInWithGoogleCredential,
   signUpWithEmail,
@@ -73,16 +69,6 @@ const googleConfigurationError = () => {
       : "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID";
   return `Google sign-in is not configured for ${Platform.OS}. Add ${variable} and rebuild the app.`;
 };
-
-async function createAppleNonce() {
-  const bytes = await Crypto.getRandomBytesAsync(32);
-  const rawNonce = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  const hashedNonce = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    rawNonce,
-  );
-  return { rawNonce, hashedNonce };
-}
 
 export default function SignInScreen() {
   const insets = useSafeAreaInsets();
@@ -227,18 +213,6 @@ export default function SignInScreen() {
     }
   };
 
-  const handleGuest = async () => {
-    setLoading(true);
-    try {
-      await signInGuest();
-      router.replace("/(tabs)");
-    } catch {
-      setError("Could not sign in as guest.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleGoogle = async () => {
     const configurationError = googleConfigurationError();
     if (configurationError) {
@@ -254,40 +228,6 @@ export default function SignInScreen() {
       await promptGoogle();
     } catch (e: any) {
       setError(e?.message ?? "Could not start Google sign-in. Please try again.");
-    }
-  };
-
-  const handleApple = async () => {
-    if (Platform.OS !== "ios") {
-      setError("Apple sign-in is available on iPhone and iPad.");
-      return;
-    }
-
-    setLoading(true);
-    setError("");
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      // Firebase verifies Apple's identity token against this nonce. The raw
-      // nonce must only go to Firebase; Apple receives its SHA-256 digest.
-      const { rawNonce, hashedNonce } = await createAppleNonce();
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-        nonce: hashedNonce,
-      });
-      if (!credential.identityToken) {
-        throw new Error("Apple did not return an identity token. Please try again.");
-      }
-      await signInWithAppleCredential(credential.identityToken, rawNonce);
-      router.replace("/(tabs)");
-    } catch (e: any) {
-      if (e?.code !== "ERR_REQUEST_CANCELED") {
-        setError(e?.message ?? "Apple sign-in failed. Please try again.");
-      }
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -370,23 +310,7 @@ export default function SignInScreen() {
               <Text style={styles.outlineBtnText}>Continue with Google</Text>
             </Pressable>
 
-            {Platform.OS === "ios" && (
-              <Pressable
-                style={[styles.outlineBtn, loading && styles.disabledBtn]}
-                onPress={handleApple}
-                disabled={loading}
-                testID="apple-sign-in"
-              >
-                <Feather name="aperture" size={18} color="#241F1B" style={styles.btnIcon} />
-                <Text style={styles.outlineBtnText}>Continue with Apple</Text>
-              </Pressable>
-            )}
-
             {!!error && <Text style={styles.errorText}>{error}</Text>}
-
-            <Pressable onPress={handleGuest} style={styles.guestBtn} disabled={loading}>
-              <Text style={styles.guestBtnText}>Continue as guest</Text>
-            </Pressable>
 
             <Text style={styles.signupText}>
               Don't have an account?{" "}
@@ -556,16 +480,6 @@ const styles = StyleSheet.create({
   outlineBtnText: {
     fontFamily: "DmSans_600SemiBold",
     fontSize: 16,
-    color: "#241F1B",
-  },
-  guestBtn: {
-    alignItems: "center",
-    paddingVertical: 12,
-    marginTop: 8,
-  },
-  guestBtnText: {
-    fontFamily: "DmSans_500Medium",
-    fontSize: 15,
     color: "#241F1B",
   },
   signupText: {

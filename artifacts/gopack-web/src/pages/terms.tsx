@@ -17,7 +17,7 @@ export default function Terms() {
       <p>You must be at least 13 years old to use the Service. By using GoPackNow you represent that you meet this requirement and that you have the legal capacity to enter into these Terms.</p>
 
       <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>2. Account</h2>
-      <p>You may sign in with Google or as a guest. You are responsible for all activity that occurs under your account. Notify us immediately at <a href="mailto:support@gopack.now" style={{ color: "#E85D3A" }}>support@gopack.now</a> if you suspect unauthorized use.</p>
+      <p>You may sign in with Google. You are responsible for all activity that occurs under your account. Notify us immediately at <a href="mailto:support@gopack.now" style={{ color: "#E85D3A" }}>support@gopack.now</a> if you suspect unauthorized use.</p>
 
       <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>3. Subscriptions &amp; Payments</h2>
       <p>GoPackNow offers optional paid subscriptions ("GoPackNow Plus") processed by Paddle.com, our Merchant of Record. By subscribing you agree to Paddle's <a href="https://www.paddle.com/legal/checkout-buyer-terms" style={{ color: "#E85D3A" }} target="_blank" rel="noopener noreferrer">Buyer Terms</a>. Subscription fees are charged at the start of each billing period. You may cancel anytime; access continues until the end of the paid period. See our <a href="/refunds" style={{ color: "#E85D3A" }}>Refund Policy</a> for details.</p>

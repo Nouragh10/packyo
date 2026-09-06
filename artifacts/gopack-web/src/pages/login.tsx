@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
-import { signInWithGoogle, signInGuest } from "@/lib/firebase";
+import { signInWithGoogle } from "@/lib/firebase";
 import { SiGoogle } from "react-icons/si";
 import { Loader2 } from "lucide-react";
 
@@ -10,7 +10,7 @@ export default function Login() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const search = useSearch();
-  const [loading, setLoading] = useState<"google" | "guest" | null>(null);
+  const [loading, setLoading] = useState<"google" | null>(null);
   const [error, setError] = useState("");
 
   const params = new URLSearchParams(search);
@@ -35,19 +35,6 @@ export default function Login() {
       } else {
         setError("Google sign-in failed. Please try again.");
       }
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const handleGuest = async () => {
-    setLoading("guest");
-    setError("");
-    try {
-      await signInGuest();
-      setLocation(redirectTo);
-    } catch {
-      setError("Could not sign in as guest. Please try again.");
     } finally {
       setLoading(null);
     }
@@ -117,21 +104,6 @@ export default function Login() {
               Continue with Google
             </button>
 
-            <div className="flex items-center gap-3 my-2">
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-xs text-muted-foreground">or</span>
-              <div className="flex-1 h-px bg-border" />
-            </div>
-
-            <button
-              onClick={handleGuest}
-              disabled={!!loading}
-              className="flex items-center justify-center gap-3 w-full bg-muted/50 rounded-full py-3.5 font-medium hover:bg-muted transition-colors disabled:opacity-50 text-muted-foreground"
-              data-testid="button-signin-guest"
-            >
-              {loading === "guest" ? <Loader2 size={18} className="animate-spin" /> : null}
-              Continue as guest
-            </button>
           </div>
 
           <p className="text-xs text-muted-foreground mt-8 text-center">

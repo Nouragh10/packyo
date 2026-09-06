@@ -145,13 +145,6 @@ export default function JoinTrip() {
               >
                 Sign in to join
               </button>
-              <button
-                onClick={handleJoin}
-                className="w-full border border-border font-medium py-4 rounded-full hover:bg-muted/50 transition-colors text-muted-foreground"
-                data-testid="button-join-guest"
-              >
-                Continue as guest
-              </button>
             </div>
           ) : (
             /* Authenticated — show who they're joining as, then join */
