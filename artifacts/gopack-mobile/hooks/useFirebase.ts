@@ -86,6 +86,12 @@ export interface Trip {
   destinationSuggestions?: DestinationSuggestion[];
   destinationVotes?: Record<string, Record<string, "up" | "down">>;
   destinationLockedBy?: Record<string, boolean>;
+  aiDestinationDecision?: {
+    suggestionIndex: number;
+    name: string;
+    reason: string;
+    decidedAt: string;
+  };
   accommodationStatus?: "collecting_prefs" | "voting" | "confirmed" | "booked" | "skipped";
   accommodationPreferences?: Record<string, AccommodationPreference>;
   accommodationSuggestions?: AccommodationSuggestion[];
@@ -1321,8 +1327,10 @@ export async function storeRedoSuggestions(
 ) {
   await update(ref(db, `trips/${tripId}`), {
     destinationSuggestions: suggestions,
+    destination: null,
     destinationVotes: null,
     destinationLockedBy: null,
+    aiDestinationDecision: null,
   });
 }
 
@@ -1345,8 +1353,10 @@ export async function lockDestinationVotes(tripId: string, uid: string) {
 /** Reset all votes + locks (keep suggestions) so everyone re-swipes — used for tie-break re-vote. */
 export async function resetDestinationForRevote(tripId: string) {
   await update(ref(db, `trips/${tripId}`), {
+    destination: null,
     destinationVotes: null,
     destinationLockedBy: null,
+    aiDestinationDecision: null,
   });
 }
 
@@ -1360,6 +1370,24 @@ export async function confirmDestination(tripId: string, name: string) {
     destinationSuggestions: null,
     destinationVotes: null,
     destinationLockedBy: null,
+    aiDestinationDecision: null,
+  });
+}
+
+export async function chooseDestinationWithAi(
+  tripId: string,
+  suggestionIndex: number,
+  name: string,
+  reason: string,
+) {
+  await update(ref(db, `trips/${tripId}`), {
+    destination: name,
+    aiDestinationDecision: {
+      suggestionIndex,
+      name,
+      reason,
+      decidedAt: new Date().toISOString(),
+    },
   });
 }
 

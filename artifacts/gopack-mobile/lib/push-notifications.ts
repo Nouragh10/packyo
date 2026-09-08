@@ -63,7 +63,14 @@ export async function registerForPushNotifications(uid: string): Promise<{
 }
 
 export async function hasRegisteredPushToken(): Promise<boolean> {
-  return !!(await AsyncStorage.getItem(TOKEN_CACHE_KEY));
+  if (Platform.OS === "web" || !Device.isDevice) return false;
+
+  const [cachedToken, permission] = await Promise.all([
+    AsyncStorage.getItem(TOKEN_CACHE_KEY),
+    Notifications.getPermissionsAsync(),
+  ]);
+
+  return !!cachedToken && permission.status === "granted";
 }
 
 export async function sendTripPush(

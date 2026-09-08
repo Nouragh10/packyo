@@ -18,6 +18,7 @@
     },
     "ios": {
       "supportsTablet": false,
+      "usesAppleSignIn": true,
       "bundleIdentifier": "com.gopacknow.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
@@ -42,6 +43,12 @@
       ],
       "expo-font",
       "expo-web-browser",
+       [
+         "expo-image-picker",
+         {
+           "photosPermission": "Allow Packyo to access your photos so you can choose a profile picture."
+         }
+       ],
        "expo-apple-authentication",
        [
          "expo-notifications",

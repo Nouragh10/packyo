@@ -37,6 +37,16 @@ const CATEGORY_ORDER = ["essentials", "clothing", "toiletries", "tech", "activit
 
 export default function PackingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+
+  return <PackingListContent id={id} />;
+}
+
+interface PackingListContentProps {
+  id?: string;
+  embedded?: boolean;
+}
+
+export function PackingListContent({ id, embedded = false }: PackingListContentProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -137,12 +147,14 @@ export default function PackingScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: colors.background }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={20} color={colors.foreground} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.foreground }]}>Packing List</Text>
-      </View>
+      {!embedded && (
+        <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: colors.background }]}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Feather name="arrow-left" size={20} color={colors.foreground} />
+          </Pressable>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Packing List</Text>
+        </View>
+      )}
       
       <View style={styles.subHeader}>
         <Text style={[styles.headerDest, { color: colors.foreground }]} numberOfLines={1}>
@@ -187,7 +199,7 @@ export default function PackingScreen() {
         <>
           <ScrollView
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomInset + 100 }}
+            contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomInset + (embedded ? 24 : 100) }}
           >
             {CATEGORY_ORDER.filter((cat) => packingList[cat]?.length > 0).map((cat) => {
               const meta = CATEGORY_META[cat] ?? { label: cat, color: colors.mutedForeground };
@@ -284,15 +296,17 @@ export default function PackingScreen() {
             })}
           </ScrollView>
 
-          <View style={[styles.bottomCta, { paddingBottom: bottomInset + 16, backgroundColor: colors.background, borderTopColor: colors.border }]}>
-             <Pressable onPress={handleGenerate} disabled={generating} style={[styles.fullBtn, { backgroundColor: colors.primary }]}>
+          {!embedded && (
+            <View style={[styles.bottomCta, { paddingBottom: bottomInset + 16, backgroundColor: colors.background, borderTopColor: colors.border }]}>
+              <Pressable onPress={handleGenerate} disabled={generating} style={[styles.fullBtn, { backgroundColor: colors.primary }]}>
                 {generating ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <Text style={styles.fullBtnText}>View full checklist</Text>
                 )}
-             </Pressable>
-          </View>
+              </Pressable>
+            </View>
+          )}
         </>
       )}
     </View>

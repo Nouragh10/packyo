@@ -1,9 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import React from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -13,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getDownloadURL, ref as storageRef, uploadString } from "firebase/storage";
 
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -25,7 +28,7 @@ import {
   useSavedDestinations,
   useTrips,
 } from "@/hooks/useFirebase";
-import { signOut } from "@/lib/firebase";
+import { signOut, storage, updateCurrentUserPhoto } from "@/lib/firebase";
 import { WikiImage } from "@/components/WikiImage";
 
 const TRIP_IMAGES = [
@@ -133,6 +136,12 @@ export default function ProfileScreen() {
   const { savedDestinations, loading: savedDestinationsLoading } = useSavedDestinations(user?.uid);
   const [removingSavedId, setRemovingSavedId] = React.useState<string | null>(null);
   const [savedError, setSavedError] = React.useState("");
+  const [showAllPacks, setShowAllPacks] = React.useState(false);
+  const [showAllTrips, setShowAllTrips] = React.useState(false);
+  const [showAllWishes, setShowAllWishes] = React.useState(false);
+  const [showAllActivities, setShowAllActivities] = React.useState(false);
+  const [uploadedPhotoURL, setUploadedPhotoURL] = React.useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = React.useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -161,6 +170,50 @@ export default function ProfileScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     await signOut();
     router.replace("/sign-in");
+  };
+
+  const handleChooseProfilePhoto = async () => {
+    if (!user || uploadingPhoto) return;
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permission.status !== "granted") {
+      Alert.alert("Photo access needed", "Allow Packyo to access your photos to choose a profile picture.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.75,
+      base64: true,
+    });
+    if (result.canceled) return;
+
+    const asset = result.assets[0];
+    if (!asset?.base64) {
+      Alert.alert("Could not use photo", "Packyo could not read that image. Please choose another photo.");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    try {
+      const profilePhotoRef = storageRef(storage, `profilePhotos/${user.uid}/avatar`);
+      await uploadString(profilePhotoRef, asset.base64, "base64", {
+        contentType: asset.mimeType ?? "image/jpeg",
+      });
+      const photoURL = await getDownloadURL(profilePhotoRef);
+      await updateCurrentUserPhoto(photoURL);
+      setUploadedPhotoURL(photoURL);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error) {
+      Alert.alert(
+        "Could not update photo",
+        error instanceof Error ? error.message : "Please try again.",
+      );
+    } finally {
+      setUploadingPhoto(false);
+    }
   };
 
   const openTrip = (tripId: string, hasItinerary: boolean) => {
@@ -214,17 +267,25 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.profileIntro}>
-          <View style={styles.avatarWrap}>
+          <Pressable
+            onPress={handleChooseProfilePhoto}
+            disabled={!user || uploadingPhoto}
+            style={({ pressed }) => [styles.avatarWrap, pressed && { opacity: 0.8 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Choose profile picture"
+          >
             <Image
               source={{
-                uri: user?.photoURL ?? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=240&q=80",
+                uri: uploadedPhotoURL ?? user?.photoURL ?? "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=240&q=80",
               }}
               style={styles.avatar}
             />
             <View style={[styles.cameraBadge, { backgroundColor: colors.primary, borderColor: colors.background }]}>
-              <Feather name="camera" size={12} color={colors.primaryForeground} />
+              {uploadingPhoto
+                ? <ActivityIndicator size="small" color={colors.primaryForeground} />
+                : <Feather name="camera" size={12} color={colors.primaryForeground} />}
             </View>
-          </View>
+          </Pressable>
           <View style={styles.identity}>
             <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>{displayName}</Text>
             <Text style={[styles.handle, { color: colors.mutedForeground }]}>{handle}</Text>
@@ -283,8 +344,8 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <SectionHeading
             title="My packs"
-            action={packs.length > 0 ? "See all" : undefined}
-            onAction={packs.length === 1 ? () => router.push(`/groups/${packs[0].id}` as any) : undefined}
+            action={packs.length > 3 ? (showAllPacks ? "Show less" : "See all") : undefined}
+            onAction={packs.length > 3 ? () => setShowAllPacks((current) => !current) : undefined}
             colors={colors}
           />
           {packs.length === 0 ? (
@@ -294,7 +355,7 @@ export default function ProfileScreen() {
               <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>Save a group of travel friends after your next itinerary.</Text>
             </View>
           ) : (
-            packs.slice(0, 3).map((pack) => {
+            (showAllPacks ? packs : packs.slice(0, 3)).map((pack) => {
               const memberNames = Object.values(pack.members ?? {}).map((member) => member.name);
               const tripCount = Object.keys(pack.tripIds ?? {}).length;
               return (
@@ -334,7 +395,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionHeading title="Your trips" action={trips.length > 3 ? "See all" : undefined} colors={colors} />
+          <SectionHeading
+            title="Your trips"
+            action={trips.length > 3 ? (showAllTrips ? "Show less" : "See all") : undefined}
+            onAction={trips.length > 3 ? () => setShowAllTrips((current) => !current) : undefined}
+            colors={colors}
+          />
           {tripsLoading ? (
             <View style={styles.inlineLoading}>
               <ActivityIndicator color={colors.primary} />
@@ -346,7 +412,7 @@ export default function ProfileScreen() {
               <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>Your next adventure starts with a shared plan.</Text>
             </View>
           ) : (
-            trips.slice(0, 3).map((trip, index) => {
+            (showAllTrips ? trips : trips.slice(0, 3)).map((trip, index) => {
               const past = tripIsPast(trip.startDate, trip.days);
               const progress = trip.itinerary ? 100 : trip.destination ? 55 : 20;
               return (
@@ -434,7 +500,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionHeading title="My wishes" action={wishes.length > 3 ? "See all" : undefined} colors={colors} />
+          <SectionHeading
+            title="My wishes"
+            action={wishes.length > 3 ? (showAllWishes ? "Show less" : "See all") : undefined}
+            onAction={wishes.length > 3 ? () => setShowAllWishes((current) => !current) : undefined}
+            colors={colors}
+          />
           {wishes.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Feather name="star" size={22} color={colors.mutedForeground} />
@@ -442,7 +513,7 @@ export default function ProfileScreen() {
               <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>Add a wish inside one of your trip hubs.</Text>
             </View>
           ) : (
-            wishes.slice(0, 3).map((wish) => (
+            (showAllWishes ? wishes : wishes.slice(0, 3)).map((wish) => (
               <View key={`${wish.id}-${wish.tripDestination}`} style={[styles.wishRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.wishIcon, { backgroundColor: colors.primary + "14" }]}>
                   <Feather name="heart" size={14} color={colors.primary} />
@@ -500,7 +571,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionHeading title="Suggested activities" action={activities.length > 3 ? "See all" : undefined} colors={colors} />
+          <SectionHeading
+            title="Suggested activities"
+            action={activities.length > 3 ? (showAllActivities ? "Show less" : "See all") : undefined}
+            onAction={activities.length > 3 ? () => setShowAllActivities((current) => !current) : undefined}
+            colors={colors}
+          />
           {activities.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Feather name="compass" size={22} color={colors.mutedForeground} />
@@ -510,7 +586,7 @@ export default function ProfileScreen() {
               </Text>
             </View>
           ) : (
-            activities.slice(0, 3).map((item) => (
+            (showAllActivities ? activities : activities.slice(0, 3)).map((item) => (
               <Pressable
                 key={item.id}
                 onPress={() => router.push(`/itinerary/${item.tripId}` as any)}

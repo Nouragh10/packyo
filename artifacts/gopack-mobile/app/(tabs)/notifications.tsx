@@ -65,7 +65,7 @@ export default function NotificationsScreen() {
   const { notifications, loading } = useNotifications(user?.uid);
 
   useEffect(() => {
-    hasRegisteredPushToken().then(setPushEnabled).catch(() => undefined);
+    hasRegisteredPushToken().then(setPushEnabled).catch(() => setPushEnabled(false));
   }, []);
 
   useEffect(() => {
@@ -183,20 +183,33 @@ export default function NotificationsScreen() {
         ))}
       </View>
 
-      {user && !pushEnabled ? (
+      {user ? (
         <View style={[styles.pushBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.pushIcon, { backgroundColor: colors.primary + "14" }]}>
-            <Feather name="bell" size={17} color={colors.primary} />
+            <Feather name={pushEnabled ? "bell" : "bell-off"} size={17} color={colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.pushTitle, { color: colors.foreground }]}>Get trip alerts</Text>
+            <Text style={[styles.pushTitle, { color: colors.foreground }]}>
+              {pushEnabled ? "Trip alerts are on" : "Get trip alerts"}
+            </Text>
             <Text style={[styles.pushBody, { color: colors.mutedForeground }]}>
-              See voting, itinerary, and chat updates even when Packyo is closed.
+              {pushEnabled
+                ? "Packyo can notify you about voting, itinerary, and chat updates."
+                : "See voting, itinerary, and chat updates even when Packyo is closed."}
             </Text>
             {!!pushMessage && <Text style={[styles.pushMessage, { color: colors.mutedForeground }]}>{pushMessage}</Text>}
           </View>
-          <Pressable onPress={enablePush} disabled={enablingPush} style={[styles.pushButton, { backgroundColor: colors.primary }]}>
-            {enablingPush ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.pushButtonText}>Enable</Text>}
+          <Pressable
+            onPress={enablePush}
+            disabled={enablingPush || pushEnabled}
+            style={[
+              styles.pushButton,
+              { backgroundColor: colors.primary, opacity: pushEnabled ? 0.65 : 1 },
+            ]}
+          >
+            {enablingPush
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.pushButtonText}>{pushEnabled ? "On" : "Enable"}</Text>}
           </Pressable>
         </View>
       ) : null}

@@ -1,5 +1,7 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, FontAwesome } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as AuthSession from "expo-auth-session";
+import * as Crypto from "expo-crypto";
 import * as Google from "expo-auth-session/providers/google";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
@@ -19,10 +21,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   auth,
+  signInWithAppleCredential,
+  signInWithApplePopup,
   signInWithEmail,
   signInWithGoogleCredential,
   signUpWithEmail,
   signOut,
+  updateCurrentUserProfile,
 } from "@/lib/firebase";
 import { GoPackIcon } from "@/components/GoPackLogo";
 import colors from "@/constants/colors";
@@ -231,6 +236,63 @@ export default function SignInScreen() {
     }
   };
 
+  const handleApple = async () => {
+    if (loading || (Platform.OS !== "ios" && Platform.OS !== "web")) return;
+
+    setLoading(true);
+    setError("");
+    try {
+      if (Platform.OS === "web") {
+        await signInWithApplePopup();
+        router.replace("/(tabs)");
+        return;
+      }
+
+      const available = await AppleAuthentication.isAvailableAsync();
+      if (!available) {
+        throw new Error("Sign in with Apple is not available on this device.");
+      }
+
+      const rawNonce = Crypto.randomUUID();
+      const nonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        rawNonce,
+      );
+      const appleCredential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce,
+      });
+
+      if (!appleCredential.identityToken) {
+        throw new Error("Apple did not return an identity token. Please try again.");
+      }
+
+      await signInWithAppleCredential(appleCredential.identityToken, rawNonce);
+
+      const appleName = [
+        appleCredential.fullName?.givenName,
+        appleCredential.fullName?.middleName,
+        appleCredential.fullName?.familyName,
+      ].filter(Boolean).join(" ").trim();
+      if (appleName) {
+        // Apple only returns the name on first authorization. A profile update
+        // failure must not invalidate the Firebase session that already succeeded.
+        await updateCurrentUserProfile(appleName).catch(() => undefined);
+      }
+
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      if (e?.code !== "ERR_REQUEST_CANCELED") {
+        setError(e?.message ?? "Apple sign-in failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (mode === "verify") {
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
@@ -309,6 +371,28 @@ export default function SignInScreen() {
               <Feather name="globe" size={18} color="#241F1B" style={styles.btnIcon} />
               <Text style={styles.outlineBtnText}>Continue with Google</Text>
             </Pressable>
+
+            {Platform.OS === "ios" ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={24}
+                style={styles.appleButton}
+                onPress={handleApple}
+              />
+            ) : Platform.OS === "web" ? (
+              <Pressable
+                style={[styles.appleWebButton, loading && styles.disabledBtn]}
+                onPress={handleApple}
+                disabled={loading}
+                accessibilityRole="button"
+                accessibilityLabel="Continue with Apple"
+                testID="apple-sign-in"
+              >
+                <FontAwesome name="apple" size={21} color="#FFFFFF" style={styles.btnIcon} />
+                <Text style={styles.appleWebButtonText}>Continue with Apple</Text>
+              </Pressable>
+            ) : null}
 
             {!!error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -452,6 +536,25 @@ const styles = StyleSheet.create({
   authButtons: {
     gap: 12,
     marginTop: 40,
+  },
+  appleButton: {
+    width: "100%",
+    height: 52,
+  },
+  appleWebButton: {
+    width: "100%",
+    minHeight: 52,
+    borderRadius: 24,
+    backgroundColor: "#000000",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  appleWebButtonText: {
+    color: "#FFFFFF",
+    fontFamily: "DmSans_600SemiBold",
+    fontSize: 16,
   },
   primaryBtn: {
     backgroundColor: PRIMARY,

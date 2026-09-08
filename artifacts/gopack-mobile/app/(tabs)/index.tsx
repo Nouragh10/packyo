@@ -17,7 +17,7 @@ import { Image } from "expo-image";
 
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
-import { deleteTrip, leaveTrip, useTrips } from "@/hooks/useFirebase";
+import { deleteTrip, leaveTrip, useTrips, type Trip } from "@/hooks/useFirebase";
 
 // Some mock thumbnails for trips to match wireframe style
 const TRIP_IMAGES = [
@@ -25,6 +25,19 @@ const TRIP_IMAGES = [
   "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=400&q=80&auto=format&fit=crop", // Lisbon
   "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=400&q=80&auto=format&fit=crop", // Japan
 ];
+
+function hasTripEnded(trip: Trip, now = Date.now()): boolean {
+  let end: Date | null = null;
+
+  if (trip.endDate) {
+    end = new Date(`${trip.endDate}T23:59:59.999`);
+  } else if (trip.startDate) {
+    end = new Date(`${trip.startDate}T23:59:59.999`);
+    end.setDate(end.getDate() + Math.max(Number(trip.days) || 1, 1) - 1);
+  }
+
+  return !!end && !Number.isNaN(end.getTime()) && end.getTime() < now;
+}
 
 export default function DashboardScreen() {
   const colors = useColors();
@@ -101,7 +114,14 @@ export default function DashboardScreen() {
           {trips.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No trips yet.</Text>
           ) : (
-            trips.map((trip, i) => (
+            trips.map((trip, i) => {
+              const tripEnded = hasTripEnded(trip);
+              const hasReview = !!user && !!(
+                trip.memberReviews?.[user.uid] ||
+                (trip.review as { reviewedBy?: string } | undefined)?.reviewedBy === user.uid
+              );
+
+              return (
               <Pressable
                 key={trip.id}
                 style={[styles.tripCard, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -132,6 +152,20 @@ export default function DashboardScreen() {
                       {Object.keys(trip.members ?? {}).length} members
                     </Text>
                   </View>
+                  {tripEnded && !hasReview ? (
+                    <Pressable
+                      onPress={(event) => {
+                        event.stopPropagation?.();
+                        router.push(`/review/${trip.id}` as any);
+                      }}
+                      style={[styles.reviewButton, { backgroundColor: colors.primary }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Review ${trip.destination || "trip"}`}
+                    >
+                      <Feather name="star" size={13} color="#fff" />
+                      <Text style={styles.reviewButtonText}>Review</Text>
+                    </Pressable>
+                  ) : null}
                 </View>
                 <Pressable
                   testID={`remove-trip-${trip.id}`}
@@ -154,7 +188,8 @@ export default function DashboardScreen() {
                   />
                 </Pressable>
               </Pressable>
-            ))
+              );
+            })
           )}
         </View>
 
@@ -334,6 +369,21 @@ const styles = StyleSheet.create({
   tripMembersText: {
     fontFamily: "DmSans_400Regular",
     fontSize: 13,
+  },
+  reviewButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  reviewButtonText: {
+    color: "#fff",
+    fontFamily: "DmSans_600SemiBold",
+    fontSize: 12,
   },
   actionContainer: {
     paddingHorizontal: 24,

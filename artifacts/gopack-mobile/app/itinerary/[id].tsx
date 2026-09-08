@@ -31,7 +31,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { PackingListContent } from "../packing/[id]";
 import { apiFetch } from "@/lib/api-client";
+import { resolveTripDays } from "@/lib/trip-dates";
 import {
   Activity,
   ItineraryDay,
@@ -156,6 +158,48 @@ function safeExportFileName(value: string | undefined, extension: string): strin
     .replace(/^-+|-+$/g, "")
     .toLowerCase() || "trip";
   return `${stem}-itinerary.${extension}`;
+}
+
+function printItineraryHtmlOnWeb(html: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const frame = document.createElement("iframe");
+    let settled = false;
+
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      frame.remove();
+      resolve();
+    };
+
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.position = "fixed";
+    frame.style.right = "0";
+    frame.style.bottom = "0";
+    frame.style.width = "1px";
+    frame.style.height = "1px";
+    frame.style.border = "0";
+    frame.style.opacity = "0";
+
+    frame.onload = () => {
+      const printWindow = frame.contentWindow;
+      if (!printWindow) {
+        frame.remove();
+        reject(new Error("The itinerary print window could not be opened."));
+        return;
+      }
+
+      printWindow.addEventListener("afterprint", finish, { once: true });
+      printWindow.focus();
+      printWindow.print();
+
+      // Some browsers do not dispatch afterprint when the dialog is cancelled.
+      setTimeout(finish, 60_000);
+    };
+
+    document.body.appendChild(frame);
+    frame.srcdoc = html;
+  });
 }
 
 function foldIcsLine(line: string): string[] {
@@ -1033,7 +1077,7 @@ export default function ItineraryScreen() {
   const { trip, loading } = useTrip(id);
   const wishes = useWishes(id);
 
-  const [activeTab, setActiveTab] = useState<"itinerary" | "info" | "map">("itinerary");
+  const [activeTab, setActiveTab] = useState<"itinerary" | "info" | "map" | "packing">("itinerary");
   const [editModal, setEditModal] = useState<EditState | null>(null);
   const [addChoiceDay, setAddChoiceDay] = useState<number | null>(null);
   const [mapImport, setMapImport] = useState<MapImportState | null>(null);
@@ -1050,6 +1094,8 @@ export default function ItineraryScreen() {
   const [savePackSaving, setSavePackSaving] = useState(false);
   const [packSavedName, setPackSavedName] = useState<string | null>(null);
   const [savePackError, setSavePackError] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const shareInFlightRef = useRef(false);
 
   useEffect(() => {
     if (!trip?.itinerary || !user || !id) return;
@@ -1104,7 +1150,8 @@ export default function ItineraryScreen() {
   };
 
   const itinerary = trip?.itinerary;
-  const days = itinerary?.days ?? [];
+  const selectedTripDays = resolveTripDays(trip?.startDate, trip?.endDate, trip?.days);
+  const days = (itinerary?.days ?? []).slice(0, selectedTripDays);
   const showEstimatedCosts = trip?.showEstimatedCosts !== false;
   const members = Object.values(trip?.members ?? {});
 
@@ -1308,7 +1355,9 @@ export default function ItineraryScreen() {
   };
 
   const handleShare = async () => {
-    if (!trip || !itinerary) return;
+    if (!trip || !itinerary || shareInFlightRef.current) return;
+    shareInFlightRef.current = true;
+    setSharing(true);
     const lines = [
       `🗺 ${itinerary.title}`,
       `📍 ${trip.destination} · ${trip.days} days`,
@@ -1324,7 +1373,22 @@ export default function ItineraryScreen() {
       totalCost > 0 ? `💰 Estimated total: ~$${totalCost}/person` : "",
       "Built with packyo ✦",
     ].filter(Boolean);
-    await Share.share({ message: lines.join("\n") });
+    try {
+      await Share.share({ message: lines.join("\n") });
+    } catch (caught) {
+      const error = caught as Error & { name?: string };
+      const isDismissalOrBusy =
+        error.name === "AbortError" ||
+        error.name === "InvalidStateError" ||
+        /earlier share has not yet completed|share canceled|share cancelled/i.test(error.message ?? "");
+
+      if (!isDismissalOrBusy) {
+        Alert.alert("Could not share itinerary", error.message || "Please try again.");
+      }
+    } finally {
+      shareInFlightRef.current = false;
+      setSharing(false);
+    }
   };
 
   const handleExportCalendar = async () => {
@@ -1501,6 +1565,10 @@ export default function ItineraryScreen() {
         trip.vibes ?? [],
         accom,
       );
+      if (Platform.OS === "web") {
+        await printItineraryHtmlOnWeb(html);
+        return;
+      }
       const { uri } = await Print.printToFileAsync({ html, base64: false });
       const baseFileName = safeExportFileName(trip.destination, "pdf").replace(/\.pdf$/, "");
       const exportDirectory = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
@@ -1587,32 +1655,73 @@ export default function ItineraryScreen() {
           </Pressable>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Itinerary</Text>
         </View>
-        <View style={styles.headerTabs}>
-          {(["itinerary", "info", "map"] as const).map((t) => (
-            <Pressable
-              key={t}
-              style={[styles.headerTab, activeTab === t && { borderBottomColor: colors.foreground }]}
-              onPress={() => setActiveTab(t)}
-            >
-              <Text style={[
-                styles.headerTabText,
-                activeTab === t
-                  ? { color: colors.foreground, fontFamily: "DmSans_600SemiBold" }
-                  : { color: colors.mutedForeground },
-              ]}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.headerTabs}
+          contentContainerStyle={styles.headerTabsContent}
+        >
+          {(["itinerary", "info", "map", "packing"] as const).map((t) => {
+            const isActive = activeTab === t;
+            return (
+              <Pressable
+                key={t}
+                style={[styles.headerTab, isActive && { borderBottomColor: colors.foreground }]}
+                onPress={() => setActiveTab(t)}
+              >
+                <Text style={[
+                  styles.headerTabText,
+                  isActive
+                    ? { color: colors.foreground, fontFamily: "DmSans_600SemiBold" }
+                    : { color: colors.mutedForeground },
+                ]}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Pressable
+            style={[styles.headerTab, sharing && { opacity: 0.5 }]}
+            onPress={handleShare}
+            disabled={sharing}
+          >
+            <Text style={[styles.headerTabText, { color: colors.mutedForeground }]}>
+              {sharing ? "Sharing…" : "Share"}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={styles.headerTab}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setShowExportSheet(true);
+            }}
+          >
+            <Text style={[styles.headerTabText, { color: colors.mutedForeground }]}>Export</Text>
+          </Pressable>
+          <Pressable style={styles.headerTab} onPress={() => router.push(`/chat/${id}`)}>
+            <Text style={[styles.headerTabText, { color: colors.mutedForeground }]}>Chat</Text>
+          </Pressable>
+          <Pressable
+            style={styles.headerTab}
+            onPress={() => {
+              setSavePackName(`${trip.destination} Crew`);
+              setShowSavePackModal(true);
+              Haptics.selectionAsync();
+            }}
+          >
+            <Text style={[styles.headerTabText, { color: colors.primary }]}>Save</Text>
+          </Pressable>
+        </ScrollView>
       </View>
+
+      {activeTab === "packing" && <PackingListContent id={id} embedded />}
 
       {/* ── INFO TAB ── */}
       {activeTab === "info" && (
         <ScrollView
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: bottomInset + 100 }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: bottomInset + 24 }}
         >
           <Text style={[styles.titleDest, { color: colors.foreground, marginBottom: 16 }]}>{trip.destination}</Text>
           {(() => {
@@ -1698,7 +1807,7 @@ export default function ItineraryScreen() {
           <ScrollView
             showsVerticalScrollIndicator={false}
             style={{ flex: 1 }}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: bottomInset + 100 }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: bottomInset + 24 }}
           >
             {/* Hero CTA */}
             <Pressable
@@ -1763,7 +1872,7 @@ export default function ItineraryScreen() {
       {activeTab === "itinerary" && <ScrollView
         showsVerticalScrollIndicator={false}
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomInset + 100 }}
+        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: bottomInset + 24 }}
       >
         <View style={styles.titleRow}>
           <Text style={[styles.titleDest, { color: colors.foreground }]}>{trip.destination}</Text>
@@ -1896,28 +2005,6 @@ export default function ItineraryScreen() {
           );
         })()}
       </ScrollView>}
-
-      <View style={[styles.bottomBar, { paddingBottom: bottomInset + 12, backgroundColor: colors.background, borderTopColor: colors.border }]}>
-        <Pressable style={styles.bottomAction} onPress={handleShare}>
-          <Feather name="share" size={20} color={colors.foreground} />
-          <Text style={[styles.bottomActionText, { color: colors.foreground }]}>Share</Text>
-        </Pressable>
-        <Pressable
-          style={styles.bottomAction}
-          onPress={() => { Haptics.selectionAsync(); setShowExportSheet(true); }}
-        >
-          {exportingPDF || exportingCalendar ? <ActivityIndicator size="small" color={colors.foreground} /> : <Feather name="download" size={20} color={colors.foreground} />}
-          <Text style={[styles.bottomActionText, { color: colors.foreground }]}>Export</Text>
-        </Pressable>
-        <Pressable style={styles.bottomAction} onPress={() => router.push(`/chat/${id}`)}>
-          <Feather name="message-circle" size={20} color={colors.foreground} />
-          <Text style={[styles.bottomActionText, { color: colors.foreground }]}>Chat</Text>
-        </Pressable>
-        <Pressable style={styles.bottomAction} onPress={() => { setSavePackName(`${trip.destination} Crew`); setShowSavePackModal(true); Haptics.selectionAsync(); }}>
-          <Feather name="package" size={20} color={colors.primary} />
-          <Text style={[styles.bottomActionText, { color: colors.primary }]}>Save as pack!</Text>
-        </Pressable>
-      </View>
 
       {/* ── EXPORT SHEET ── */}
       <Modal
@@ -2250,8 +2337,9 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 12 },
   backBtn: { padding: 4, marginLeft: -4 },
   headerTitle: { fontFamily: "DmSans_600SemiBold", fontSize: 16, flex: 1, textAlign: "center", marginRight: 24 },
-  headerTabs: { flexDirection: "row", justifyContent: "space-between" },
-  headerTab: { flex: 1, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent", alignItems: "center" },
+  headerTabs: { marginHorizontal: -16 },
+  headerTabsContent: { paddingHorizontal: 16 },
+  headerTab: { minWidth: 76, paddingHorizontal: 10, paddingVertical: 12, borderBottomWidth: 2, borderBottomColor: "transparent", alignItems: "center" },
   headerTabText: { fontFamily: "DmSans_500Medium", fontSize: 14 },
   
   titleRow: { paddingVertical: 16, marginTop: 8 },
@@ -2331,16 +2419,6 @@ const styles = StyleSheet.create({
   accomCardLabel: { fontFamily: "DmSans_600SemiBold", fontSize: 11, letterSpacing: 1.5 },
   accomCardName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 18 },
   accomCardMeta: { fontFamily: "DmSans_400Regular", fontSize: 14, textTransform: "capitalize" },
-
-  bottomBar: {
-    position: "absolute",
-    bottom: 0, left: 0, right: 0,
-    flexDirection: "row",
-    paddingTop: 12,
-    borderTopWidth: 1,
-  },
-  bottomAction: { flex: 1, alignItems: "center", gap: 4, paddingHorizontal: 4 },
-  bottomActionText: { fontFamily: "DmSans_500Medium", fontSize: 11 },
 
   /* Info tab */
   infoCard: {

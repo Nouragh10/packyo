@@ -47,7 +47,6 @@ import {
 const TEAL = "#26A69A";
 const MEMBER_COLORS = ["#F15A3A", "#F4BC55", "#A77BD6", "#68B7A0", "#EE9D54", "#6EA6D8"];
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_WIDTH = Math.min(SCREEN_WIDTH - 32, 420);
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
 
 /* ── Helpers ───────────────────────────────────────────────────── */
@@ -137,7 +136,7 @@ function TopAccommodationCard({
 
   return (
     <GestureDetector gesture={panGesture}>
-      <Animated.View style={[styles.swipeCard, { backgroundColor: colors.card, borderColor: colors.border, width: CARD_WIDTH }, cardStyle]}>
+      <Animated.View style={[styles.swipeCard, { backgroundColor: colors.card, borderColor: colors.border }, cardStyle]}>
         <Animated.View style={[styles.swipeLabel, styles.swipeLabelRight, likeStyle]}>
           <Feather name="heart" size={20} color="#4CAF50" />
           <Text style={[styles.swipeLabelText, { color: "#4CAF50" }]}>LOVE IT</Text>
@@ -148,7 +147,7 @@ function TopAccommodationCard({
         </Animated.View>
 
         {(suggestion.photos ?? [])[0] ? (
-          <View style={{ width: CARD_WIDTH - 28, height: 160, borderRadius: 12, marginBottom: 12, overflow: "hidden" }}>
+          <View style={styles.swipeImageWrap}>
             <WikiImage
               name={suggestion.name}
               context={suggestion.location}
@@ -159,7 +158,7 @@ function TopAccommodationCard({
             />
           </View>
         ) : (
-          <View style={{ width: CARD_WIDTH - 28, height: 160, borderRadius: 12, marginBottom: 12, overflow: "hidden" }}>
+          <View style={styles.swipeImageWrap}>
             <WikiImage
               name={suggestion.name}
               context={suggestion.location}
@@ -184,7 +183,7 @@ function TopAccommodationCard({
           ) : null}
         </View>
 
-        <Text style={[styles.swipeCardName, { color: colors.foreground }]}>{suggestion.name}</Text>
+        <Text style={[styles.swipeCardName, { color: colors.foreground }]} numberOfLines={2}>{suggestion.name}</Text>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
           <Feather name="map-pin" size={12} color={colors.mutedForeground} />
           <Text style={{ fontFamily: "DmSans_400Regular", fontSize: 13, color: colors.mutedForeground }} numberOfLines={1}>
@@ -194,24 +193,24 @@ function TopAccommodationCard({
 
         <View style={[styles.whyBox, { backgroundColor: colors.muted }]}>
           <Feather name="zap" size={12} color={TEAL} />
-          <Text style={[styles.whyText, { color: colors.foreground }]}>{suggestion.whyItFits}</Text>
+          <Text style={[styles.whyText, { color: colors.foreground }]} numberOfLines={3}>{suggestion.whyItFits}</Text>
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 20 }}>
           <View>
             <Text style={{ fontFamily: "DmSans_400Regular", fontSize: 11, color: colors.mutedForeground }}>Per person</Text>
-            <Text style={{ fontFamily: "DmSans_700Bold", fontSize: 22, color: TEAL }}>${(suggestion.costPerPerson ?? 0).toLocaleString()}</Text>
+            <Text style={{ fontFamily: "DmSans_700Bold", fontSize: 18, color: TEAL }}>${(suggestion.costPerPerson ?? 0).toLocaleString()}</Text>
           </View>
           <View style={{ width: 1, height: 32, backgroundColor: colors.border }} />
           <View>
             <Text style={{ fontFamily: "DmSans_400Regular", fontSize: 11, color: colors.mutedForeground }}>Total</Text>
-            <Text style={{ fontFamily: "DmSans_700Bold", fontSize: 22, color: colors.foreground }}>${(suggestion.totalCost ?? 0).toLocaleString()}</Text>
+            <Text style={{ fontFamily: "DmSans_700Bold", fontSize: 18, color: colors.foreground }}>${(suggestion.totalCost ?? 0).toLocaleString()}</Text>
           </View>
         </View>
 
         {(suggestion.amenities ?? []).length > 0 ? (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 5 }}>
-            {(suggestion.amenities ?? []).slice(0, 4).map((a) => (
+            {(suggestion.amenities ?? []).slice(0, 3).map((a) => (
               <View key={a} style={{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.muted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
                 <Feather name="check" size={10} color={TEAL} />
                 <Text style={{ fontFamily: "DmSans_400Regular", fontSize: 11, color: colors.mutedForeground }}>{a}</Text>
@@ -329,10 +328,10 @@ function AccommodationSwipeStack({
       <Text style={[styles.swipeCounter, { color: colors.mutedForeground }]}>{pos + 1} / {swipeOrder.length}</Text>
       <View style={styles.swipeStack}>
         {thirdIdx !== undefined && suggestions[thirdIdx] ? (
-          <View style={[styles.swipeCard, styles.swipeBgCard3, { backgroundColor: colors.card, borderColor: colors.border, width: CARD_WIDTH }]} />
+            <View style={[styles.swipeCard, styles.swipeBgCard3, { backgroundColor: colors.card, borderColor: colors.border }]} />
         ) : null}
         {nextIdx !== undefined && suggestions[nextIdx] ? (
-          <View style={[styles.swipeCard, styles.swipeBgCard2, { backgroundColor: colors.card, borderColor: colors.border, width: CARD_WIDTH }]} />
+            <View style={[styles.swipeCard, styles.swipeBgCard2, { backgroundColor: colors.card, borderColor: colors.border }]} />
         ) : null}
         <TopAccommodationCard
           key={`ac-${pos}`}
@@ -971,12 +970,13 @@ const styles = StyleSheet.create({
   lockBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
   lockBtnText: { fontFamily: "DmSans_600SemiBold", fontSize: 13 },
 
-  swipeStackWrap: { flex: 1, alignItems: "center", paddingTop: 6 },
+  swipeStackWrap: { flex: 1, alignItems: "center", paddingTop: 6, minHeight: 0 },
   swipeCounter: { fontFamily: "DmSans_400Regular", fontSize: 12, marginBottom: 8 },
-  swipeStack: { flex: 1, width: "100%", alignItems: "center", justifyContent: "center" },
-  swipeCard: { position: "absolute" as const, width: CARD_WIDTH, borderRadius: 18, borderWidth: 1, padding: 14, gap: 9 },
+  swipeStack: { flex: 1, width: "100%", minHeight: 0, justifyContent: "center" },
+  swipeCard: { position: "absolute" as const, left: 16, right: 16, borderRadius: 18, borderWidth: 1, padding: 12, gap: 7 },
   swipeBgCard2: { top: 12, transform: [{ scale: 0.96 }], opacity: 0.85 },
   swipeBgCard3: { top: 24, transform: [{ scale: 0.92 }], opacity: 0.6 },
+  swipeImageWrap: { width: "100%", height: 122, borderRadius: 12, marginBottom: 4, overflow: "hidden" },
   swipeLabel: {
     position: "absolute", top: 16, flexDirection: "row", alignItems: "center",
     gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
@@ -985,15 +985,15 @@ const styles = StyleSheet.create({
   swipeLabelRight: { right: 14, borderColor: "#4CAF50" },
   swipeLabelLeft: { left: 14, borderColor: "#ef4444" },
   swipeLabelText: { fontFamily: "DmSans_700Bold", fontSize: 13, letterSpacing: 1 },
-  swipeTapRow: { flexDirection: "row", gap: 16, marginTop: 12, marginBottom: 4 },
+  swipeTapRow: { flexDirection: "row", gap: 12, marginTop: 8, marginBottom: 4 },
   swipeActionPill: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    borderRadius: 100, borderWidth: 1, paddingHorizontal: 28, paddingVertical: 14,
+    borderRadius: 100, borderWidth: 1, paddingHorizontal: 24, paddingVertical: 12,
     shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 2,
   },
   swipeActionPillText: { fontFamily: "DmSans_600SemiBold", fontSize: 15 },
-  swipeCardName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 18, lineHeight: 24 },
-  swipeHint: { fontFamily: "DmSans_400Regular", fontSize: 11, textAlign: "center", marginTop: 2 },
+  swipeCardName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 18, lineHeight: 22 },
+  swipeHint: { fontFamily: "DmSans_400Regular", fontSize: 10, textAlign: "center" },
 
   allDoneWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
   allDoneCard: { borderRadius: 20, borderWidth: 1, padding: 32, alignItems: "center", gap: 12, width: "100%" },

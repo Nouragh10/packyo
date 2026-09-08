@@ -14,6 +14,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api-client";
+import { resolveTripDays } from "@/lib/trip-dates";
 import { saveItinerary, useTrip, useWishes } from "@/hooks/useFirebase";
 import { isWishEligible } from "@/lib/wish-eligibility";
 import { sendTripPush } from "@/lib/push-notifications";
@@ -63,9 +64,15 @@ export default function BuildingScreen() {
         const memberPrefs = Object.values((trip as any).memberPreferences ?? {}) as Array<Record<string, unknown>>;
 
         const prefDays = memberPrefs.map(p => Number(p.days)).filter(d => d > 0);
-        const resolvedDays = prefDays.length > 0
-          ? Math.round(prefDays.reduce((s, d) => s + d, 0) / prefDays.length)
-          : (trip.days ?? 5);
+        const preferenceFallbackDays = prefDays.length > 0
+          ? Math.round(prefDays.reduce((sum, days) => sum + days, 0) / prefDays.length)
+          : 5;
+        const resolvedDays = resolveTripDays(
+          trip.startDate,
+          trip.endDate,
+          trip.days,
+          preferenceFallbackDays,
+        );
 
         const memberCount = Object.keys(trip.members ?? {}).length;
         const includedWishes = [...wishes]

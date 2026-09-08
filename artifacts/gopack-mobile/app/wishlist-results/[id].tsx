@@ -78,13 +78,7 @@ export default function WishlistResultsScreen() {
   const hiddenCount = allIncluded.length - 5;
 
   const handleContinue = () => {
-    if (!trip.accommodationStatus || trip.accommodationStatus === "collecting_prefs") {
-      router.push(`/accommodation-preferences/${id}`);
-    } else if (trip.accommodationStatus === "voting") {
-      router.push(`/accommodation-vote/${id}`);
-    } else {
-      router.push(`/trip/${id}`);
-    }
+    router.push(`/accommodation/${id}`);
   };
 
   return (

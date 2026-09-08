@@ -39,10 +39,8 @@ import {
   lockVotes,
   confirmPack,
   incrementAiUsage,
-  setAccommodationStatus,
   unlockVotes,
   useTrip,
-  usePackingList,
   useWishes,
   voteWish,
   Wish,
@@ -391,7 +389,6 @@ export default function TripHubScreen() {
   const router = useRouter();
 
   const { trip, loading } = useTrip(id);
-  const { packingList } = usePackingList(id);
   const wishes = useWishes(id);
 
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -409,7 +406,6 @@ export default function TripHubScreen() {
   const [copied, setCopied] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [lockingVotes, setLockingVotes] = useState(false);
-  const [showAccomModal, setShowAccomModal] = useState(false);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom + 12;
@@ -445,14 +441,11 @@ export default function TripHubScreen() {
   const accomVoting = accomStatus === "voting";
   const accomConfirmed = accomStatus === "confirmed";
   const accomCollecting = accomStatus === "collecting_prefs";
-  const hasPackingList = !!packingList && Object.values(packingList).some((items) => items.length > 0);
-
   const checklistSteps = [
     { id: "dest", done: destConfirmed },
     { id: "wish", done: wishes.length > 0 },
     { id: "accom", done: accomConfirmed || accomStatus === "skipped" },
     { id: "itinerary", done: !!trip?.itinerary },
-    { id: "packing", done: hasPackingList },
   ];
   const completedSteps = checklistSteps.filter(s => s.done).length;
   const totalSteps = checklistSteps.length;
@@ -528,19 +521,6 @@ export default function TripHubScreen() {
   const waitingMembers = members
     .filter(([uid]) => !lockedBy[uid])
     .map(([, m]) => m.name);
-
-  const handleAccomChoice = async (choice: "vote" | "booked" | "later") => {
-    setShowAccomModal(false);
-    if (!id) return;
-    if (choice === "vote") {
-      await setAccommodationStatus(id, "voting");
-      router.push(`/accommodation-vote/${id}`);
-    } else if (choice === "booked") {
-      await setAccommodationStatus(id, "booked");
-    } else {
-      await setAccommodationStatus(id, "skipped");
-    }
-  };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -628,7 +608,7 @@ export default function TripHubScreen() {
                     break;
                   case "accom":
                     icon = "home"; title = "Accommodation";
-                    onPress = () => showAccomBanner ? setShowAccomModal(true) : router.push(`/accommodation-preferences/${id}`);
+                    onPress = () => router.push(`/accommodation/${id}`);
                     if (accomVoting || accomCollecting) { statusIcon = "clock"; statusColor = "#F59E0B"; }
                     break;
                   case "itinerary":
@@ -642,10 +622,6 @@ export default function TripHubScreen() {
                       onPress = () => setActiveTab("go");
                       statusIcon = "clock"; statusColor = "#F59E0B";
                     }
-                    break;
-                  case "packing":
-                    icon = "package"; title = "Packing list";
-                    onPress = () => router.push(`/packing/${id}`);
                     break;
                 }
 
@@ -794,33 +770,6 @@ export default function TripHubScreen() {
           )}
         </>
       )}
-
-      {/* Accommodation choice modal */}
-      <Modal visible={showAccomModal} transparent animationType="slide" onRequestClose={() => setShowAccomModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowAccomModal(false)}>
-          <Pressable style={[styles.inviteSheet, { backgroundColor: colors.card }]}>
-            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 }}>
-              <Feather name="home" size={20} color={colors.primary} />
-              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Accommodation</Text>
-            </View>
-            <Text style={[styles.sheetLabel, { color: colors.mutedForeground, textTransform: "none", letterSpacing: 0, fontSize: 13, marginBottom: 8 }]}>How do you want to handle where the group stays?</Text>
-            <Pressable onPress={() => handleAccomChoice("vote")} style={[styles.accomOption, { backgroundColor: colors.primary + "10", borderColor: colors.primary }]}>
-              <View style={[styles.accomOptionIcon, { backgroundColor: colors.primary }]}><Feather name="link" size={18} color="#fff" /></View>
-              <View style={{ flex: 1 }}><Text style={[styles.accomOptionTitle, { color: colors.foreground }]}>Submit & vote on links</Text><Text style={[styles.accomOptionSub, { color: colors.mutedForeground }]}>Everyone adds their preferred listing — the pack votes, AI breaks ties</Text></View>
-              <Feather name="arrow-right" size={18} color={colors.primary} />
-            </Pressable>
-            <Pressable onPress={() => handleAccomChoice("booked")} style={[styles.accomOption, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <View style={[styles.accomOptionIcon, { backgroundColor: colors.primary }]}><Feather name="check-circle" size={18} color="#fff" /></View>
-              <View style={{ flex: 1 }}><Text style={[styles.accomOptionTitle, { color: colors.foreground }]}>We already booked</Text><Text style={[styles.accomOptionSub, { color: colors.mutedForeground }]}>Skip this — accommodation is sorted</Text></View>
-            </Pressable>
-            <Pressable onPress={() => { handleAccomChoice("later"); setShowAccomModal(false); }} style={[styles.accomOption, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <View style={[styles.accomOptionIcon, { backgroundColor: colors.mutedForeground }]}><Feather name="clock" size={18} color="#fff" /></View>
-              <View style={{ flex: 1 }}><Text style={[styles.accomOptionTitle, { color: colors.foreground }]}>Decide later</Text><Text style={[styles.accomOptionSub, { color: colors.mutedForeground }]}>Mark as done and come back to it</Text></View>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
 
       {/* Invite modal */}
       <Modal visible={showInvite} transparent animationType="slide" onRequestClose={() => setShowInvite(false)}>

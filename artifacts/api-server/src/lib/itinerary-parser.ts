@@ -310,46 +310,75 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function isFiniteNonNegativeNumber(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+function accommodationNumber(value: unknown, fallback = 0): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-function isPositiveInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0;
+function accommodationPositiveInteger(value: unknown, fallback = 1): number {
+  return Math.max(1, Math.round(accommodationNumber(value, fallback)));
 }
 
-function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every(isNonEmptyString);
+function accommodationStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter(isNonEmptyString).map((item) => item.trim())
+    : [];
 }
 
-function validateAccommodationSuggestions(value: unknown): value is AccommodationSuggestionsResponse {
-  if (!isRecord(value) || !Array.isArray(value.suggestions) || value.suggestions.length !== 3) return false;
+function normalizeAccommodationSuggestions(value: unknown): AccommodationSuggestionsResponse | null {
+  if (!isRecord(value) || !Array.isArray(value.suggestions)) return null;
 
   const names = new Set<string>();
-  return value.suggestions.every((suggestion, index) => {
-    if (!isRecord(suggestion)) return false;
-    const name = suggestion.name;
-    if (!isNonEmptyString(name)) return false;
-    const nameKey = name.trim().toLowerCase();
-    if (names.has(nameKey)) return false;
+  const normalized: AccommodationSuggestion[] = [];
+  for (const rawSuggestion of value.suggestions) {
+    if (!isRecord(rawSuggestion) || !isNonEmptyString(rawSuggestion.name)) continue;
+
+    const name = rawSuggestion.name.trim();
+    const nameKey = name.toLowerCase();
+    if (names.has(nameKey)) continue;
     names.add(nameKey);
 
-    return suggestion.id === `opt-${index + 1}` &&
-      (suggestion.type === "hotel" || suggestion.type === "airbnb" || suggestion.type === "hostel" || suggestion.type === "other") &&
-      isNonEmptyString(suggestion.location) &&
-      isFiniteNonNegativeNumber(suggestion.totalCost) &&
-      isFiniteNonNegativeNumber(suggestion.costPerPerson) &&
-      isPositiveInteger(suggestion.nights) &&
-      isFiniteNonNegativeNumber(suggestion.rating) &&
-      isStringArray(suggestion.amenities) &&
-      isPositiveInteger(suggestion.rooms) &&
-      isPositiveInteger(suggestion.beds) &&
-      isNonEmptyString(suggestion.cancellation) &&
-      isNonEmptyString(suggestion.whyItFits) &&
-      isStringArray(suggestion.tags) &&
-      isNonEmptyString(suggestion.distanceNote) &&
-      isNonEmptyString(suggestion.submittedBy);
-  });
+    const rawType = isNonEmptyString(rawSuggestion.type)
+      ? rawSuggestion.type.trim().toLowerCase()
+      : "other";
+    const type: AccommodationSuggestion["type"] =
+      rawType === "hotel" || rawType === "airbnb" || rawType === "hostel"
+        ? rawType
+        : rawType.includes("rental") || rawType.includes("apartment")
+          ? "airbnb"
+          : "other";
+
+    normalized.push({
+      id: `opt-${normalized.length + 1}`,
+      name,
+      type,
+      location: isNonEmptyString(rawSuggestion.location)
+        ? rawSuggestion.location.trim()
+        : "Central area",
+      totalCost: accommodationNumber(rawSuggestion.totalCost),
+      costPerPerson: accommodationNumber(rawSuggestion.costPerPerson),
+      nights: accommodationPositiveInteger(rawSuggestion.nights),
+      rating: accommodationNumber(rawSuggestion.rating),
+      amenities: accommodationStrings(rawSuggestion.amenities),
+      rooms: accommodationPositiveInteger(rawSuggestion.rooms),
+      beds: accommodationPositiveInteger(rawSuggestion.beds),
+      cancellation: isNonEmptyString(rawSuggestion.cancellation)
+        ? rawSuggestion.cancellation.trim()
+        : "Check property policy",
+      whyItFits: isNonEmptyString(rawSuggestion.whyItFits)
+        ? rawSuggestion.whyItFits.trim()
+        : "A practical option for the group.",
+      tags: accommodationStrings(rawSuggestion.tags),
+      distanceNote: isNonEmptyString(rawSuggestion.distanceNote)
+        ? rawSuggestion.distanceNote.trim()
+        : "Check the listing for location details.",
+      submittedBy: "AI",
+    });
+
+    if (normalized.length === 3) break;
+  }
+
+  return normalized.length === 3 ? { suggestions: normalized } : null;
 }
 
 export function parseAccommodationSuggestionsResponse(text: string): AccommodationSuggestionsResponse {
@@ -359,7 +388,8 @@ export function parseAccommodationSuggestionsResponse(text: string): Accommodati
 
   try {
     for (const parsed of parseJsonCandidates(text)) {
-      if (validateAccommodationSuggestions(parsed)) return parsed;
+      const normalized = normalizeAccommodationSuggestions(parsed);
+      if (normalized) return normalized;
     }
   } catch (error) {
     throw new AccommodationResponseError(

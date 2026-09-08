@@ -21,3 +21,4 @@
 - [Firebase 12 React Native persistence](firebase12-rn-auth-persistence.md) — Metro’s native auth export and TypeScript’s web-facing declarations differ; verify native bundles.
 - [Narrow Firebase activity transactions](firebase-activity-transactions.md) — transact on one day’s activities, not the whole trip, to avoid false itinerary conflicts.
 - [Firebase list normalization](firebase-list-normalization.md) — itinerary days and activities may be arrays or keyed objects; preserve child keys and keep transaction IDs deterministic.
+- [Video zero-position utilities](video-zero-position-utilities.md) — verify compiled zero-position CSS; missing inset-0 can silently collapse every animated scene.

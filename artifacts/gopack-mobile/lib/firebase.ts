@@ -1,6 +1,7 @@
 import { getApps, initializeApp } from "firebase/app";
 import {
   browserLocalPersistence,
+  browserPopupRedirectResolver,
   createUserWithEmailAndPassword,
   EmailAuthProvider,
   getAuth,
@@ -14,6 +15,7 @@ import {
   signInAnonymously,
   signInWithCredential,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut as firebaseSignOut,
   updateProfile,
   User,
@@ -55,6 +57,9 @@ try {
       Platform.OS === "web"
         ? browserLocalPersistence
         : getReactNativePersistence(AsyncStorage),
+    ...(Platform.OS === "web"
+      ? { popupRedirectResolver: browserPopupRedirectResolver }
+      : {}),
   });
 } catch {
   auth = getAuth(app);
@@ -115,10 +120,26 @@ export const signInWithAppleCredential = (
   return signInWithCredential(auth, credential);
 };
 
+export const signInWithApplePopup = () => {
+  if (Platform.OS !== "web") {
+    throw new Error("Apple popup sign-in is only available in a web browser.");
+  }
+  const provider = new OAuthProvider("apple.com");
+  provider.addScope("email");
+  provider.addScope("name");
+  return signInWithPopup(auth, provider);
+};
+
 export const updateCurrentUserProfile = async (displayName: string) => {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error("No user signed in");
   await updateProfile(currentUser, { displayName });
+};
+
+export const updateCurrentUserPhoto = async (photoURL: string) => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error("No user signed in");
+  await updateProfile(currentUser, { photoURL });
 };
 
 async function isSessionRecent(user: User): Promise<boolean> {

@@ -56,6 +56,7 @@ export default function GroupDetailScreen() {
   const pack = packs.find((p) => p.id === id) ?? null;
 
   const [editing, setEditing] = useState(false);
+  const [editingName, setEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -76,7 +77,7 @@ export default function GroupDetailScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {}
     setRenaming(false);
-    setEditing(false);
+    setEditingName(false);
   };
 
   const handleRemoveMember = (uid: string, name: string) => {
@@ -154,6 +155,7 @@ export default function GroupDetailScreen() {
   const openPackSettings = () => {
     if (isHost && pack) {
       setNewName(pack.name);
+      setEditingName(false);
       setEditing(true);
       Haptics.selectionAsync();
     } else {
@@ -361,34 +363,61 @@ export default function GroupDetailScreen() {
               onPress={() => {}}
             >
               <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Rename pack</Text>
-              <TextInput
-                style={[styles.renameInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground }]}
-                value={newName}
-                onChangeText={setNewName}
-                placeholder="e.g. College Friends, Family, Work Squad"
-                placeholderTextColor={colors.mutedForeground}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={handleRename}
-              />
-              <View style={styles.sheetBtns}>
+              <Text style={[styles.sheetTitle, { color: colors.foreground }]}>Pack settings</Text>
+              {editingName ? (
+                <>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>PACK NAME</Text>
+                  <TextInput
+                    style={[styles.renameInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground }]}
+                    value={newName}
+                    onChangeText={setNewName}
+                    placeholder="e.g. College Friends, Family, Work Squad"
+                    placeholderTextColor={colors.mutedForeground}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={handleRename}
+                  />
+                  <View style={styles.sheetBtns}>
+                    <Pressable
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setNewName(pack.name);
+                        setEditingName(false);
+                      }}
+                      disabled={renaming}
+                      style={[styles.cancelBtn, { borderColor: colors.border, opacity: renaming ? 0.6 : 1 }]}
+                    >
+                      <Text style={[styles.cancelText, { color: colors.foreground }]}>Cancel</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={handleRename}
+                      disabled={renaming}
+                      style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: renaming ? 0.6 : 1 }]}
+                    >
+                      {renaming
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <Text style={styles.saveBtnText}>Save name</Text>}
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
                 <Pressable
-                  onPress={() => setEditing(false)}
-                  disabled={renaming || deleting}
-                  style={[styles.cancelBtn, { borderColor: colors.border, opacity: renaming || deleting ? 0.6 : 1 }]}
+                  onPress={() => setEditingName(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit pack name"
+                  style={[styles.settingRow, { backgroundColor: colors.muted, borderColor: colors.border }]}
                 >
-                  <Text style={[styles.cancelText, { color: colors.foreground }]}>Cancel</Text>
+                  <View style={styles.settingRowCopy}>
+                    <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>PACK NAME</Text>
+                    <Text style={[styles.settingValue, { color: colors.foreground }]} numberOfLines={1}>{pack.name}</Text>
+                  </View>
+                  <View style={[styles.editNameButton, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Feather name="edit-2" size={14} color={colors.primary} />
+                    <Text style={[styles.editNameButtonText, { color: colors.primary }]}>Edit name</Text>
+                  </View>
                 </Pressable>
-                <Pressable
-                  onPress={handleRename}
-                  disabled={renaming || deleting}
-                  style={[styles.saveBtn, { backgroundColor: colors.primary, opacity: renaming || deleting ? 0.6 : 1 }]}
-                >
-                  {renaming ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Save</Text>}
-                </Pressable>
-              </View>
-              {isHost ? (
+              )}
+              {isHost && !editingName ? (
                 <Pressable
                   onPress={handleDeletePack}
                   disabled={renaming || deleting}
@@ -465,6 +494,12 @@ const styles = StyleSheet.create({
   renameSheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 24, paddingBottom: 40, gap: 12 },
   sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 4 },
   sheetTitle: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 20 },
+  fieldLabel: { fontFamily: "DmSans_600SemiBold", fontSize: 10, letterSpacing: 1.1 },
+  settingRow: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, borderWidth: 1, padding: 14 },
+  settingRowCopy: { flex: 1, gap: 4 },
+  settingValue: { fontFamily: "DmSans_600SemiBold", fontSize: 15 },
+  editNameButton: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  editNameButtonText: { fontFamily: "DmSans_600SemiBold", fontSize: 12 },
   renameInput: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontFamily: "DmSans_400Regular", fontSize: 15 },
   sheetBtns: { flexDirection: "row", gap: 10 },
   cancelBtn: { flex: 1, alignItems: "center", borderWidth: 1, borderRadius: 12, paddingVertical: 13 },

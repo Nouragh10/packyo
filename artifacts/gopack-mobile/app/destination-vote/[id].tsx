@@ -28,10 +28,12 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/context/AuthContext";
+import { WikiImage } from "@/components/WikiImage";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api-client";
 import {
   DestinationSuggestion,
+  chooseDestinationWithAi,
   confirmDestination,
   lockDestinationVotes,
   resetDestinationForRevote,
@@ -47,6 +49,10 @@ const CARD_WIDTH = Math.min(SCREEN_WIDTH - 32, 420);
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.28;
 
 /* ── Helpers ───────────────────────────────────────────────────── */
+
+function destinationFallbackIndex(name: string): number {
+  return Array.from(name).reduce((total, character) => total + character.charCodeAt(0), 0);
+}
 
 function Avatar({ name, index, size = 28 }: { name: string; index: number; size?: number }) {
   const bg = MEMBER_COLORS[index % MEMBER_COLORS.length];
@@ -116,8 +122,16 @@ function TopDestinationCard({
           <Text style={[styles.swipeLabelText, { color: "#ef4444" }]}>SKIP</Text>
         </Animated.View>
 
-        <View style={{ width: '100%', height: 180, backgroundColor: colors.muted, borderRadius: 12, marginBottom: 12, alignItems: 'center', justifyContent: 'center' }}>
-          <Feather name="map" size={40} color={colors.mutedForeground} opacity={0.3} />
+        <View style={styles.swipeImageWrap}>
+          <WikiImage
+            name={suggestion.name}
+            context="travel destination"
+            query={`${suggestion.name} city travel`}
+            fallbackCategory={suggestion.tags[0] ?? "default"}
+            fallbackIndex={destinationFallbackIndex(suggestion.name)}
+            style={styles.swipeImage}
+            placeholderColor={colors.muted}
+          />
         </View>
 
         {myVote ? (
@@ -261,6 +275,7 @@ interface SuggestionCardProps {
   votes: Record<string, "up" | "down">;
   members: Record<string, { name: string }>;
   isWinning: boolean;
+  isAiChoice: boolean;
   allLocked: boolean;
   isCreator: boolean;
   packConfirmed: boolean;
@@ -269,7 +284,7 @@ interface SuggestionCardProps {
 }
 
 function SuggestionCard({
-  suggestion, idx, votes, members, isWinning, allLocked, isCreator, colors, onConfirm,
+  suggestion, idx, votes, members, isWinning, isAiChoice, allLocked, isCreator, colors, onConfirm,
 }: SuggestionCardProps) {
   const upVoters = Object.entries(votes).filter(([, v]) => v === "up");
   const downVoters = Object.entries(votes).filter(([, v]) => v === "down");
@@ -288,9 +303,20 @@ function SuggestionCard({
     ]}>
       {isWinning && allLocked && (
         <View style={styles.winBadge}>
-          <Text style={styles.winBadgeText}>⭐ WINNER</Text>
+          <Text style={styles.winBadgeText}>{isAiChoice ? "✦ AI CHOICE" : "⭐ WINNER"}</Text>
         </View>
       )}
+      <View style={styles.rankedImageWrap}>
+        <WikiImage
+          name={suggestion.name}
+          context="travel destination"
+          query={`${suggestion.name} city travel`}
+          fallbackCategory={suggestion.tags[0] ?? "default"}
+          fallbackIndex={destinationFallbackIndex(suggestion.name)}
+          style={styles.rankedImage}
+          placeholderColor={colors.muted}
+        />
+      </View>
       <View style={styles.cardTop}>
         <View style={{ flex: 1, gap: 6 }}>
           <Text style={[styles.cardName, { color: isWinning && allLocked ? "#FFFFFF" : colors.foreground }]}>
@@ -400,6 +426,7 @@ export default function DestinationVoteScreen() {
   const allLocked = memberCount > 0 && lockedCount >= memberCount;
   const myLocked = !!lockedBy[user?.uid ?? ""];
   const isCreator = trip?.hostMemberId === user?.uid;
+  const aiDecision = trip?.aiDestinationDecision;
 
   const getVotesForIdx = (idx: number): Record<string, "up" | "down"> =>
     (allVotes[idx] ?? {}) as Record<string, "up" | "down">;
@@ -428,17 +455,6 @@ export default function DestinationVoteScreen() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await lockDestinationVotes(id, user.uid);
-    } finally {
-      setLocking(false);
-    }
-  };
-
-  const handleUnlock = async () => {
-    if (!user || !id) return;
-    setLocking(true);
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      await unlockDestinationVotes(id, user.uid);
     } finally {
       setLocking(false);
     }
@@ -482,6 +498,15 @@ export default function DestinationVoteScreen() {
 
   const handleAiTiebreakDestination = async () => {
     if (!id || !trip) return;
+    if (!isCreator) {
+      Alert.alert("Only the trip creator can decide", "Ask the trip creator to use the AI tiebreaker.");
+      return;
+    }
+    if (tiedSuggestions.length < 2) {
+      Alert.alert("No tie to break", "The destination votes are no longer tied.");
+      return;
+    }
+
     setBreaking(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -495,27 +520,53 @@ export default function DestinationVoteScreen() {
           memberCount,
         }),
       });
-      if (!res.ok) throw new Error("AI could not decide");
-      const result = await res.json() as { winnerIdx: number; reason: string };
-      const picked = tiedSuggestions[result.winnerIdx];
-      Alert.alert(
-        "AI Tiebreaker",
-        `AI picks: ${picked?.name ?? "Unknown"}\n\n"${result.reason}"`,
-        [
-          { text: "Keep voting", style: "cancel" },
-          isCreator && picked
-            ? {
-                text: "Set as destination",
-                onPress: async () => {
-                  await confirmDestination(id, suggestions[picked.origIdx].name);
-                  router.replace(`/trip/${id}`);
-                },
-              }
-            : { text: "OK" },
-        ].filter(Boolean) as any,
+
+      const result = await res.json().catch(() => null) as {
+        winnerIdx?: unknown;
+        reason?: unknown;
+        error?: unknown;
+      } | null;
+
+      if (!res.ok) {
+        throw new Error(
+          typeof result?.error === "string"
+            ? result.error
+            : "AI could not decide. Please try again.",
+        );
+      }
+
+      const aiWinnerIdx = Number(result?.winnerIdx);
+      if (
+        !Number.isInteger(aiWinnerIdx) ||
+        aiWinnerIdx < 0 ||
+        aiWinnerIdx >= tiedSuggestions.length
+      ) {
+        throw new Error("AI returned an invalid destination choice. Please try again.");
+      }
+
+      const picked = tiedSuggestions[aiWinnerIdx];
+      if (!picked || !suggestions[picked.origIdx]) {
+        throw new Error("The selected destination is no longer available. Please try again.");
+      }
+
+      const reason = typeof result?.reason === "string" ? result.reason.trim() : "";
+      await chooseDestinationWithAi(
+        id,
+        picked.origIdx,
+        suggestions[picked.origIdx].name,
+        reason,
       );
-    } catch {
-      Alert.alert("Error", "Could not break the tie. Please try again.");
+      void Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      ).catch(() => {
+        // Web previews may not expose the Vibration API. Haptics must never
+        // prevent a successfully saved destination from navigating forward.
+      });
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : "Could not break the tie. Please try again.";
+      Alert.alert("Could not decide", message);
     } finally {
       setBreaking(false);
     }
@@ -649,22 +700,6 @@ export default function DestinationVoteScreen() {
             }]} />
           </View>
         </View>
-        {myLocked && (
-          <Pressable
-            onPress={handleUnlock}
-            disabled={locking}
-            style={[styles.lockBtn, { backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border }]}
-          >
-            {locking
-              ? <ActivityIndicator color={colors.mutedForeground} size="small" />
-              : (
-                <>
-                  <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
-                  <Text style={[styles.lockBtnText, { color: colors.mutedForeground }]}>Re-vote</Text>
-                </>
-              )}
-          </Pressable>
-        )}
       </View>
 
       {/* Member avatars */}
@@ -695,7 +730,7 @@ export default function DestinationVoteScreen() {
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomInset + 20 }}
         >
           {/* Tie-break banner — shown when all locked but no majority */}
-          {isTied && (
+          {isTied && !aiDecision && (
             <View style={[styles.tieBanner, { backgroundColor: "#FFA72615", borderColor: "#FFA726" }]}>
               <Feather name="alert-circle" size={18} color="#FFA726" />
               <View style={{ flex: 1, gap: 3 }}>
@@ -708,7 +743,7 @@ export default function DestinationVoteScreen() {
           )}
 
           {/* Tie-break actions — creator only */}
-          {isTied && isCreator && (
+          {isTied && isCreator && !aiDecision && (
             <View style={{ flexDirection: "row", gap: 10 }}>
               <Pressable
                 onPress={handleResetForRevote}
@@ -740,6 +775,38 @@ export default function DestinationVoteScreen() {
               </Pressable>
             </View>
           )}
+
+          {aiDecision ? (
+            <>
+              <View style={[styles.aiChoiceBanner, { backgroundColor: "#7E57C218", borderColor: "#7E57C2" }]}>
+                <View style={styles.aiChoiceIcon}>
+                  <Feather name="zap" size={17} color="#7E57C2" />
+                </View>
+                <View style={styles.aiChoiceCopy}>
+                  <Text style={styles.aiChoiceEyebrow}>AI CHOSE</Text>
+                  <Text style={[styles.aiChoiceName, { color: colors.foreground }]}>{aiDecision.name}</Text>
+                  {aiDecision.reason ? (
+                    <Text style={[styles.aiChoiceReason, { color: colors.mutedForeground }]}>
+                      {aiDecision.reason}
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+              <Pressable
+                testID="continue-to-wishlist-button"
+                accessibilityRole="button"
+                accessibilityLabel="Continue to wishlist"
+                onPress={() => router.push(`/wishlist/${id}`)}
+                style={[styles.continueWishlistBtn, { backgroundColor: colors.primary }]}
+              >
+                <View>
+                  <Text style={styles.continueWishlistEyebrow}>STEP 2</Text>
+                  <Text style={styles.continueWishlistText}>Continue to wishlist</Text>
+                </View>
+                <Feather name="arrow-right" size={21} color="#fff" />
+              </Pressable>
+            </>
+          ) : null}
 
           {/* Non-creator waiting banner (only when not tied) */}
           {allLocked && !isTied && !isCreator && (
@@ -777,9 +844,10 @@ export default function DestinationVoteScreen() {
                 uid={user?.uid ?? ""}
                 votes={getVotesForIdx(i)}
                 members={members}
-                isWinning={!isTied && i === winnerIdx}
+                isWinning={aiDecision ? i === aiDecision.suggestionIndex : !isTied && i === winnerIdx}
+                isAiChoice={aiDecision?.suggestionIndex === i}
                 allLocked={allLocked}
-                isCreator={isCreator}
+                isCreator={isCreator && !aiDecision}
                 packConfirmed={!!trip?.packConfirmed}
                 colors={colors}
                 onConfirm={handleConfirm}
@@ -868,6 +936,8 @@ const styles = StyleSheet.create({
   swipeActionPillText: { fontFamily: "DmSans_600SemiBold", fontSize: 15 },
   swipeCardName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 22, lineHeight: 28 },
   swipeHint: { fontFamily: "DmSans_400Regular", fontSize: 11, textAlign: "center", marginTop: 2 },
+  swipeImageWrap: { width: "100%", height: 180, borderRadius: 12, marginBottom: 2, overflow: "hidden" },
+  swipeImage: { width: "100%", height: "100%" },
 
   allDoneWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: 32 },
   allDoneCard: { borderRadius: 20, borderWidth: 1, padding: 32, alignItems: "center", gap: 12, width: "100%" },
@@ -875,6 +945,8 @@ const styles = StyleSheet.create({
   allDoneSub: { fontFamily: "DmSans_400Regular", fontSize: 14, textAlign: "center", lineHeight: 20 },
 
   card: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 10 },
+  rankedImageWrap: { width: "100%", height: 140, borderRadius: 12, overflow: "hidden" },
+  rankedImage: { width: "100%", height: "100%" },
   winBadge: { alignSelf: "flex-start", backgroundColor: "#F15A3A", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 3 },
   winBadgeText: { fontFamily: "DmSans_700Bold", fontSize: 11, color: "#fff", letterSpacing: 1 },
   cardTop: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
@@ -901,6 +973,18 @@ const styles = StyleSheet.create({
   tieBannerSub: { fontFamily: "DmSans_400Regular", fontSize: 13 },
   tieActionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderRadius: 12, paddingVertical: 12 },
   tieActionText: { fontFamily: "DmSans_600SemiBold", fontSize: 14 },
+  aiChoiceBanner: { flexDirection: "row", alignItems: "flex-start", gap: 12, borderRadius: 14, padding: 15, borderWidth: 1 },
+  aiChoiceIcon: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center", backgroundColor: "#7E57C224" },
+  aiChoiceCopy: { flex: 1, gap: 3 },
+  aiChoiceEyebrow: { fontFamily: "DmSans_700Bold", fontSize: 10, letterSpacing: 1.3, color: "#7E57C2" },
+  aiChoiceName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 22 },
+  aiChoiceReason: { fontFamily: "DmSans_400Regular", fontSize: 13, lineHeight: 19, marginTop: 2 },
+  continueWishlistBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderRadius: 14, paddingHorizontal: 18, paddingVertical: 15,
+  },
+  continueWishlistEyebrow: { fontFamily: "DmSans_700Bold", fontSize: 10, letterSpacing: 1.4, color: "#FFFFFFCC", marginBottom: 2 },
+  continueWishlistText: { fontFamily: "DmSans_700Bold", fontSize: 16, color: "#fff" },
 
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   inviteSheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 48, gap: 14 },

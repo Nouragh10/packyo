@@ -127,6 +127,24 @@ test("parses repaired, fenced accommodation suggestions and validates all option
   assert.equal(parsed.suggestions[2]?.id, "opt-3");
 });
 
+test("normalizes harmless accommodation model variations", () => {
+  const suggestions = createAccommodationSuggestions().suggestions.map((suggestion, index) => ({
+    ...suggestion,
+    id: "repeated-model-id",
+    type: index === 1 ? "vacation rental" : suggestion.type,
+    totalCost: String(suggestion.totalCost),
+    amenities: index === 2 ? undefined : suggestion.amenities,
+    distanceNote: index === 0 ? undefined : suggestion.distanceNote,
+  }));
+  const parsed = parseAccommodationSuggestionsResponse(JSON.stringify({ suggestions }));
+
+  assert.deepEqual(parsed.suggestions.map((suggestion) => suggestion.id), ["opt-1", "opt-2", "opt-3"]);
+  assert.equal(parsed.suggestions[1]?.type, "airbnb");
+  assert.equal(parsed.suggestions[0]?.totalCost, 600);
+  assert.deepEqual(parsed.suggestions[2]?.amenities, []);
+  assert.equal(parsed.suggestions[0]?.distanceNote, "Check the listing for location details.");
+});
+
 test("returns a recoverable accommodation error for incomplete suggestions", () => {
   assert.throws(
     () => parseAccommodationSuggestionsResponse('{"suggestions":[{"name":"Only one"}]}'),
