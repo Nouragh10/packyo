@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   auth,
-  signInWithAppleCredential,
+  signInWithAppleCustomToken,
   signInWithApplePopup,
   signInWithEmail,
   signInWithGoogleCredential,
@@ -29,6 +29,7 @@ import {
   signOut,
   updateCurrentUserProfile,
 } from "@/lib/firebase";
+import { apiFetch } from "@/lib/api-client";
 import { GoPackIcon } from "@/components/GoPackLogo";
 import colors from "@/constants/colors";
 
@@ -270,7 +271,22 @@ export default function SignInScreen() {
         throw new Error("Apple did not return an identity token. Please try again.");
       }
 
-      await signInWithAppleCredential(appleCredential.identityToken, rawNonce);
+      const response = await apiFetch("/api/auth/apple-native", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identityToken: appleCredential.identityToken,
+          rawNonce,
+        }),
+      });
+      const body = await response.json().catch(() => ({})) as {
+        customToken?: string;
+        error?: string;
+      };
+      if (!response.ok || !body.customToken) {
+        throw new Error(body.error ?? "Apple sign-in could not be completed.");
+      }
+      await signInWithAppleCustomToken(body.customToken);
 
       const appleName = [
         appleCredential.fullName?.givenName,

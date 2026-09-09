@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { readFileSync } from "node:fs";
 
 const isProd = process.env.NODE_ENV === "production";
 const isReplit = process.env.REPL_ID !== undefined;
@@ -10,6 +11,37 @@ const isReplit = process.env.REPL_ID !== undefined;
 // Vercel builds run with NODE_ENV=production and don't need them.
 const port = Number(process.env.PORT || 3000);
 const basePath = process.env.BASE_PATH || "/";
+const appleAppSiteAssociationPath = path.resolve(
+  import.meta.dirname,
+  "public/.well-known/apple-app-site-association"
+);
+
+const appleAppSiteAssociationPlugin = {
+  name: "apple-app-site-association",
+  configureServer(server: { middlewares: { use: (handler: Function) => void } }) {
+    server.middlewares.use(serveAppleAppSiteAssociation);
+  },
+  configurePreviewServer(server: { middlewares: { use: (handler: Function) => void } }) {
+    server.middlewares.use(serveAppleAppSiteAssociation);
+  },
+};
+
+function serveAppleAppSiteAssociation(
+  request: { url?: string },
+  response: { statusCode: number; setHeader: (name: string, value: string) => void; end: (body: Buffer) => void },
+  next: () => void
+) {
+  const pathname = request.url?.split("?")[0];
+  if (!pathname?.endsWith("/.well-known/apple-app-site-association")) {
+    next();
+    return;
+  }
+
+  response.statusCode = 200;
+  response.setHeader("Content-Type", "application/json");
+  response.setHeader("Cache-Control", "public, max-age=3600");
+  response.end(readFileSync(appleAppSiteAssociationPath));
+}
 
 if (!isProd && !process.env.PORT) {
   throw new Error("PORT environment variable is required in development.");
@@ -37,7 +69,7 @@ export default defineConfig({
   // The path router rejects requests into node_modules. Use a visible cache
   // location outside it so optimized modules can be served through preview.
   cacheDir: path.resolve(import.meta.dirname, "vite-cache"),
-  plugins: [react(), tailwindcss(), ...replitPlugins],
+  plugins: [appleAppSiteAssociationPlugin, react(), tailwindcss(), ...replitPlugins],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

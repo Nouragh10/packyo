@@ -1,13 +1,13 @@
 # Packyo iOS social sign-in release checklist
 
-Packyo's production iOS bundle ID is `com.gopacknow.app` and its Expo redirect
+Packyo's production iOS bundle ID is `com.gopack.app` and its Expo redirect
 scheme is `gopack-mobile://sign-in`. Complete every item below before
 submitting a build to TestFlight.
 
 ## Google sign-in
 
 1. Create OAuth client IDs for:
-    - iOS: bundle ID `com.gopacknow.app`
+    - iOS: bundle ID `com.gopack.app`
     - Android: package `com.gopacknow.app` and the release signing SHA-1/SHA-256
     - Web: the Firebase auth domain/authorized redirect URL required by
       `gopacknow-83d54`
@@ -25,13 +25,13 @@ build.
 ## Apple sign-in
 
 1. In Apple Developer, enable the **Sign in with Apple** capability for
-   `com.gopacknow.app`, then regenerate the distribution provisioning profile.
+   `com.gopack.app`, then regenerate the distribution provisioning profile.
 2. In Firebase Authentication for `gopacknow-83d54`, enable the Apple
    provider and enter the Apple Team ID, Key ID, private `.p8` signing key, and
    Services ID/primary App ID requested by Firebase.
 3. Register the Apple/Firebase return URL shown in the Firebase provider setup.
    Keep the Apple App ID, Firebase project, and App Store Connect bundle ID
-   aligned with `com.gopacknow.app`.
+   aligned with `com.gopack.app`.
 4. Confirm the release build contains the Sign in with Apple entitlement.
 
 ## EAS and TestFlight verification

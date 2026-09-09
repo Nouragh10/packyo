@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import React from "react";
@@ -186,12 +187,12 @@ export default function ProfileScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.75,
-      base64: true,
+      base64: Platform.OS === "web",
     });
     if (result.canceled) return;
 
     const asset = result.assets[0];
-    if (!asset?.base64) {
+    if (!asset?.uri || (Platform.OS === "web" && !asset.base64)) {
       Alert.alert("Could not use photo", "Packyo could not read that image. Please choose another photo.");
       return;
     }
@@ -199,9 +200,33 @@ export default function ProfileScreen() {
     setUploadingPhoto(true);
     try {
       const profilePhotoRef = storageRef(storage, `profilePhotos/${user.uid}/avatar`);
-      await uploadString(profilePhotoRef, asset.base64, "base64", {
-        contentType: asset.mimeType ?? "image/jpeg",
-      });
+      if (Platform.OS === "web") {
+        await uploadString(profilePhotoRef, asset.base64!, "base64", {
+          contentType: asset.mimeType ?? "image/jpeg",
+        });
+      } else {
+        const bucket = storage.app.options.storageBucket;
+        if (!bucket) throw new Error("Photo storage is not configured.");
+        const idToken = await user.getIdToken();
+        const objectName = encodeURIComponent(`profilePhotos/${user.uid}/avatar`);
+        const uploadUrl =
+          `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}` +
+          `/o?uploadType=media&name=${objectName}`;
+        const upload = await FileSystem.uploadAsync(uploadUrl, asset.uri, {
+          httpMethod: "POST",
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            Authorization: `Firebase ${idToken}`,
+            "Content-Type": asset.mimeType ?? "image/jpeg",
+          },
+        });
+        if (upload.status < 200 || upload.status >= 300) {
+          const errorBody = JSON.parse(upload.body || "{}") as {
+            error?: { message?: string };
+          };
+          throw new Error(errorBody.error?.message ?? "Firebase rejected the photo upload.");
+        }
+      }
       const photoURL = await getDownloadURL(profilePhotoRef);
       await updateCurrentUserPhoto(photoURL);
       setUploadedPhotoURL(photoURL);

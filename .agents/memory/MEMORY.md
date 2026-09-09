@@ -22,3 +22,5 @@
 - [Narrow Firebase activity transactions](firebase-activity-transactions.md) — transact on one day’s activities, not the whole trip, to avoid false itinerary conflicts.
 - [Firebase list normalization](firebase-list-normalization.md) — itinerary days and activities may be arrays or keyed objects; preserve child keys and keep transaction IDs deterministic.
 - [Video zero-position utilities](video-zero-position-utilities.md) — verify compiled zero-position CSS; missing inset-0 can silently collapse every animated scene.
+- [Native Apple audience exchange](native-apple-audience-exchange.md) — verify native Apple tokens server-side when Firebase Web Auth expects a web Services ID audience.
+- [React Native Firebase uploads](react-native-firebase-uploads.md) — Firebase Storage blob helpers can fail on iOS; use Expo’s native binary transfer against Storage REST.

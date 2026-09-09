@@ -14,6 +14,7 @@ import {
   sendEmailVerification,
   signInAnonymously,
   signInWithCredential,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as firebaseSignOut,
@@ -118,6 +119,13 @@ export const signInWithAppleCredential = (
     rawNonce,
   });
   return signInWithCredential(auth, credential);
+};
+
+export const signInWithAppleCustomToken = (customToken: string) => {
+  if (!customToken) {
+    throw new Error("Packyo did not receive an Apple sign-in session.");
+  }
+  return signInWithCustomToken(auth, customToken);
 };
 
 export const signInWithApplePopup = () => {

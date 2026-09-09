@@ -19,7 +19,10 @@
     "ios": {
       "supportsTablet": false,
       "usesAppleSignIn": true,
-      "bundleIdentifier": "com.gopacknow.app",
+      "bundleIdentifier": "com.gopack.app",
+      "associatedDomains": [
+        "applinks:packyo.app"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "LSApplicationQueriesSchemes": [

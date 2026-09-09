@@ -58,7 +58,7 @@ const DAY_PRODUCT_USER_FACING_TITLE = "Day Unlock";
 const DAY_PRODUCT_PRICES = [{ amount_micros: 2990000, currency: "USD" }]; // $2.99
 
 const APP_STORE_APP_NAME = "GoPackNow iOS";
-const APP_STORE_BUNDLE_ID = "com.gopacknow.app";
+const APP_STORE_BUNDLE_ID = "com.gopack.app";
 const PLAY_STORE_APP_NAME = "GoPackNow Android";
 const PLAY_STORE_PACKAGE_NAME = "com.gopacknow.app";
 
