@@ -6,7 +6,14 @@ import { Resend } from "resend";
 import { getAdminDb } from "../lib/firebase-admin";
 
 const router: IRouter = Router();
-const APPLE_NATIVE_AUDIENCE = "com.gopack.app";
+// Packyo has shipped under more than one iOS bundle identifier. Apple puts the
+// signed app's bundle identifier in `aud`, independently of the Firebase app
+// registration. Accept the known Packyo identifiers while users migrate builds.
+const APPLE_NATIVE_AUDIENCES = new Set([
+  "com.gopack.app",
+  "com.gopacknow.app",
+  "com.gopack.mobile",
+]);
 const APPLE_ISSUER = "https://appleid.apple.com";
 const APPLE_KEYS_URL = "https://appleid.apple.com/auth/keys";
 const APPLE_KEYS_TTL_MS = 60 * 60 * 1000;
@@ -97,7 +104,7 @@ function verifyAppleIdentityTokenWithKey(
   const expectedNonce = createHash("sha256").update(rawNonce).digest("hex");
 
   if (claims.iss !== APPLE_ISSUER) throw new Error("Apple identity token issuer is invalid.");
-  if (!audiences.includes(APPLE_NATIVE_AUDIENCE)) {
+  if (!audiences.some((audience) => audience && APPLE_NATIVE_AUDIENCES.has(audience))) {
     throw new Error("This Apple sign-in was issued for a different Packyo app.");
   }
   if (!claims.exp || claims.exp <= Math.floor(Date.now() / 1000)) {

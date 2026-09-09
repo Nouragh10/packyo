@@ -7,4 +7,4 @@ Native Sign in with Apple tokens use the signed iOS app’s bundle identifier as
 
 **Why:** Packyo uses the Firebase JavaScript SDK in React Native rather than the native Firebase Auth SDK, so Firebase’s single configured Apple audience can conflict with the audience Apple places in a native TestFlight token.
 
-**How to apply:** Keep the browser popup flow on Firebase. For native iOS, verify Apple’s JWT signature, issuer, expiration, bundle audience, and hashed nonce on the API, then return a short-lived Firebase custom token. Treat the bundle ID in the signed App Store app as authoritative.
+**How to apply:** Keep the browser popup flow on Firebase. For native iOS, verify Apple’s JWT signature, issuer, expiration, bundle audience, and hashed nonce on the API, then return a short-lived Firebase custom token. Treat the bundle ID in the signed App Store app as authoritative. During the Packyo bundle-ID migration, accept the known signed Packyo bundle audiences rather than assuming a newly added Firebase iOS registration changes existing Apple tokens.
