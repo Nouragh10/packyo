@@ -12,6 +12,7 @@ import { useTrip, startCollectingPreferences, confirmPack, incrementAiUsage, sav
 import { useTripPremium } from "@/hooks/usePremium";
 import { useGenerateItinerary, useGeneratePackingList } from "@workspace/api-client-react";
 import { UpgradeModal } from "@/components/UpgradeModal";
+import { trackEvent } from "@/lib/analytics";
 
 const VIBE_LABELS: Record<string, string> = {
   culture: "Culture", food: "Foodie", adventure: "Adventure",
@@ -84,9 +85,13 @@ export default function TripHub() {
     generateItinerary.mutate(
       { data: { destination: trip.destination, days: trip.days, vibes: trip.vibes || [], budget: trip.budget || "midrange", startDate: trip.startDate || null, wishes: wishList } },
       {
-        onSuccess: (result) => {
+        onSuccess: async (result) => {
           incrementAiUsage(tripId, "itinerary");
-          updateItinerary(result);
+          await updateItinerary(result);
+          trackEvent("itinerary_generated", {
+            generation_mode: "ai",
+            duration_days: trip.days,
+          });
           setLocation(`/trip/${tripId}/itinerary`);
         },
         onError: (err: any) => { setItineraryError(err?.message || "Generation failed. Please try again."); },

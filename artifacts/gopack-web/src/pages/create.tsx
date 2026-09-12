@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrips, getSavedPacks, sendPackInvites, type SavedPack } from "@/hooks/useFirebase";
 import { Loader2, ArrowLeft, Check, Users, Package } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 const VIBES = [
   { id: "culture", label: "Culture" },
@@ -73,6 +74,12 @@ export default function Create() {
       if (decideWithGroup) tripData.collectingPreferences = true;
       const tripId = await createTrip(tripData);
       if (tripId) {
+        trackEvent("trip_created", {
+          planning_mode: decideWithGroup ? "group_decides" : "fixed_destination",
+          duration_days: days,
+          has_start_date: Boolean(startDate),
+          invited_saved_pack: Boolean(selectedPackId),
+        });
         if (selectedPackId && user) {
           const pack = savedPacks.find(p => p.id === selectedPackId);
           if (pack) {

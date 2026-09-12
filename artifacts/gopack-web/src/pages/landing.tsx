@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { MapPin, Users, Sparkles, Star } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { SiApple } from "react-icons/si";
+import { trackEvent } from "@/lib/analytics";
 
 const steps = [
   { number: "1", label: "Wish", desc: "Everyone drops their dream activities into the group wishlist" },
@@ -53,7 +54,7 @@ export default function Landing() {
           <Link href={dest} className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-login">
             {user ? "Dashboard" : "Sign in"}
           </Link>
-          <a href="https://apps.apple.com/app/gopacknow/id6785086190" target="_blank" rel="noopener noreferrer" className="bg-foreground text-background text-sm font-medium px-4 md:px-5 py-2.5 rounded-full hover:bg-foreground/90 transition-colors flex items-center gap-2" data-testid="link-nav-download">
+          <a href="https://apps.apple.com/app/gopacknow/id6785086190" target="_blank" rel="noopener noreferrer" onClick={() => trackEvent("app_store_click", { placement: "nav" })} className="bg-foreground text-background text-sm font-medium px-4 md:px-5 py-2.5 rounded-full hover:bg-foreground/90 transition-colors flex items-center gap-2" data-testid="link-nav-download">
             <SiApple size={16} /> <span className="hidden md:inline">Get the App</span><span className="md:hidden">Download</span>
           </a>
         </div>
@@ -76,7 +77,7 @@ export default function Landing() {
             </p>
 
             <div className="flex flex-col gap-5 mb-10">
-              <a href="https://apps.apple.com/app/gopacknow/id6785086190" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-3 bg-foreground text-background font-medium px-8 py-4 rounded-full hover:bg-foreground/90 transition-transform hover:scale-105 active:scale-95 shadow-xl w-fit" data-testid="link-hero-download">
+              <a href="https://apps.apple.com/app/gopacknow/id6785086190" target="_blank" rel="noopener noreferrer" onClick={() => trackEvent("app_store_click", { placement: "hero" })} className="inline-flex items-center justify-center gap-3 bg-foreground text-background font-medium px-8 py-4 rounded-full hover:bg-foreground/90 transition-transform hover:scale-105 active:scale-95 shadow-xl w-fit" data-testid="link-hero-download">
                 <SiApple size={28} />
                 <div className="flex flex-col items-start leading-none text-left">
                   <span className="text-[10px] text-background/80 uppercase tracking-widest mb-1 font-semibold">Download on the</span>
@@ -246,7 +247,7 @@ export default function Landing() {
           <p className="text-lg text-muted-foreground mb-10 max-w-xl mx-auto">
             Download Packyo on your iPhone today and turn that group chat into a real getaway.
           </p>
-          <a href="https://apps.apple.com/app/gopacknow/id6785086190" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-3 bg-foreground text-background font-medium px-8 py-4 rounded-full hover:bg-foreground/90 transition-transform hover:scale-105 active:scale-95 shadow-xl mx-auto">
+          <a href="https://apps.apple.com/app/gopacknow/id6785086190" target="_blank" rel="noopener noreferrer" onClick={() => trackEvent("app_store_click", { placement: "footer_cta" })} className="inline-flex items-center justify-center gap-3 bg-foreground text-background font-medium px-8 py-4 rounded-full hover:bg-foreground/90 transition-transform hover:scale-105 active:scale-95 shadow-xl mx-auto">
             <SiApple size={24} />
             <div className="flex flex-col items-start leading-none text-left">
               <span className="text-[10px] text-background/80 uppercase tracking-wider mb-1">Download on the</span>

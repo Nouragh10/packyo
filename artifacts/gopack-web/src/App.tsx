@@ -28,6 +28,7 @@ import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
 import Refunds from "@/pages/refunds";
 import Pricing from "@/pages/pricing";
+import { trackEvent } from "@/lib/analytics";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ function GoogleAuthHandler() {
     handleGoogleRedirectResult()
       .then((result) => {
         if (result?.user) {
+          trackEvent("sign_in_succeeded", { method: "google", flow: "redirect" });
           const dest = sessionStorage.getItem("gopack_auth_redirect") || "/dashboard";
           sessionStorage.removeItem("gopack_auth_redirect");
           setLocation(dest);

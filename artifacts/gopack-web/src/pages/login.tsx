@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { signInWithGoogle } from "@/lib/firebase";
 import { SiGoogle } from "react-icons/si";
 import { Loader2 } from "lucide-react";
+import { trackEvent } from "@/lib/analytics";
 
 export default function Login() {
   const { user } = useAuth();
@@ -26,6 +27,7 @@ export default function Login() {
     setError("");
     try {
       await signInWithGoogle();
+      trackEvent("sign_in_succeeded", { method: "google", flow: "popup" });
       setLocation(redirectTo);
     } catch (err: any) {
       if (err?.code === "auth/popup-blocked") {

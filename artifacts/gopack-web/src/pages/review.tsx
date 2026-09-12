@@ -4,6 +4,7 @@ import { ArrowLeft, Star, Camera, X, Globe, Lock, Loader2, Check } from "lucide-
 import { motion } from "framer-motion";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrip } from "@/hooks/useFirebase";
+import { trackEvent } from "@/lib/analytics";
 
 const VIBES = [
   { key: "beach", label: "Beach" },
@@ -134,6 +135,12 @@ export default function Review() {
         highlight: highlight.trim(),
         isPublic,
         photos: photoUrls,
+      });
+      trackEvent("review_submitted", {
+        rating,
+        is_public: isPublic,
+        photo_count: photoUrls.length,
+        vibe_count: vibes.length,
       });
       setLocation(`/trip/${tripId}`);
     } catch (e) {

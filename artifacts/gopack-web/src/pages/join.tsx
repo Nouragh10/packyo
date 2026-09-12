@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTrips } from "@/hooks/useFirebase";
 import { ref, get } from "firebase/database";
 import { db } from "@/lib/firebase";
+import { trackEvent } from "@/lib/analytics";
 
 export default function JoinTrip() {
   const [, params] = useRoute("/join/:tripId");
@@ -58,6 +59,7 @@ export default function JoinTrip() {
     try {
       const name = user.displayName || user.email?.split("@")[0] || "Guest";
       await joinTrip(tripId, name);
+      trackEvent("trip_joined", { join_surface: "invite_page" });
       setLocation(`/trip/${tripId}`);
     } catch (error) {
       const code = typeof error === "object" && error !== null && "code" in error
