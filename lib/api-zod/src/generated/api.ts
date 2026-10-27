@@ -21,22 +21,33 @@ export const HealthCheckResponse = zod.object({
  * Uses Claude to generate a day-by-day itinerary based on trip details and wishes
  * @summary Generate AI trip itinerary
  */
-const WishItem = zod.object({
-  "text": zod.string(),
-  "author": zod.string(),
-  "votes": zod.number()
-});
-
 export const GenerateItineraryBody = zod.object({
   "destination": zod.string().describe('Trip destination(s)'),
   "days": zod.number().describe('Number of trip days'),
   "vibes": zod.array(zod.string()).describe('Trip vibes (culture, food, adventure, etc.)'),
   "budget": zod.string().describe('Budget level (budget, midrange, luxury)'),
   "startDate": zod.string().nullish().describe('Trip start date (YYYY-MM-DD)'),
-  /** @deprecated use guaranteed + candidates instead */
-  "wishes": zod.array(WishItem).optional().describe('Legacy: group wishes sorted by votes'),
-  "guaranteed": zod.array(WishItem).optional().describe('Wishes that must appear in the itinerary (fairness-capped)'),
-  "candidates": zod.array(WishItem).optional().describe('Wishes to include if slots allow, skipped if pacing requires')
+  "wishes": zod.array(zod.object({
+  "id": zod.string().optional(),
+  "wishId": zod.string().optional(),
+  "text": zod.string(),
+  "author": zod.string(),
+  "votes": zod.number()
+})).optional().describe('Legacy group wishes sorted by votes'),
+  "guaranteed": zod.array(zod.object({
+  "id": zod.string().optional(),
+  "wishId": zod.string().optional(),
+  "text": zod.string(),
+  "author": zod.string(),
+  "votes": zod.number()
+})).optional().describe('Wishes that must appear in the itinerary'),
+  "candidates": zod.array(zod.object({
+  "id": zod.string().optional(),
+  "wishId": zod.string().optional(),
+  "text": zod.string(),
+  "author": zod.string(),
+  "votes": zod.number()
+})).optional().describe('Wishes to include when slots allow')
 })
 
 export const GenerateItineraryResponse = zod.object({
@@ -81,6 +92,241 @@ export const GeneratePackingListResponse = zod.object({
   "activities": zod.array(zod.string()),
   "tips": zod.array(zod.string())
 })
+})
+
+
+/**
+ * @summary Read the member-only expense ledger
+ */
+export const GetTripExpensesParams = zod.object({
+  "tripId": zod.coerce.string()
+})
+
+export const GetTripExpensesResponse = zod.object({
+  "currency": zod.string(),
+  "currencyLocked": zod.boolean(),
+  "expenses": zod.array(zod.object({
+  "title": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "category": zod.enum(['Food', 'Accommodation', 'Transportation', 'Activities', 'Shopping', 'Other']),
+  "date": zod.string(),
+  "payerId": zod.string(),
+  "participantIds": zod.array(zod.string()),
+  "splitMethod": zod.enum(['equal', 'custom']),
+  "shares": zod.record(zod.string(), zod.number()).optional(),
+  "notes": zod.string().optional(),
+  "revision": zod.number().optional()
+}).and(zod.object({
+  "id": zod.string(),
+  "tripId": zod.string(),
+  "creatorId": zod.string(),
+  "editorId": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "deletedAt": zod.string().optional(),
+  "shares": zod.record(zod.string(), zod.number()),
+  "revision": zod.number()
+}))),
+  "settlements": zod.array(zod.object({
+  "fromId": zod.string(),
+  "toId": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "date": zod.string()
+}).and(zod.object({
+  "id": zod.string(),
+  "tripId": zod.string(),
+  "creatorId": zod.string(),
+  "createdAt": zod.string(),
+  "status": zod.enum(['completed'])
+}))),
+  "members": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "paidMinor": zod.number(),
+  "shareMinor": zod.number(),
+  "balanceMinor": zod.number(),
+  "isCurrentMember": zod.boolean()
+})),
+  "totalMinor": zod.number(),
+  "repayments": zod.array(zod.object({
+  "fromId": zod.string(),
+  "toId": zod.string(),
+  "amountMinor": zod.number()
+}))
+})
+
+
+export const AddTripExpenseParams = zod.object({
+  "tripId": zod.coerce.string()
+})
+
+export const AddTripExpenseBody = zod.object({
+  "title": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "category": zod.enum(['Food', 'Accommodation', 'Transportation', 'Activities', 'Shopping', 'Other']),
+  "date": zod.string(),
+  "payerId": zod.string(),
+  "participantIds": zod.array(zod.string()),
+  "splitMethod": zod.enum(['equal', 'custom']),
+  "shares": zod.record(zod.string(), zod.number()).optional(),
+  "notes": zod.string().optional(),
+  "revision": zod.number().optional()
+})
+
+
+export const EditTripExpenseParams = zod.object({
+  "tripId": zod.coerce.string(),
+  "expenseId": zod.coerce.string()
+})
+
+export const EditTripExpenseBody = zod.object({
+  "title": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "category": zod.enum(['Food', 'Accommodation', 'Transportation', 'Activities', 'Shopping', 'Other']),
+  "date": zod.string(),
+  "payerId": zod.string(),
+  "participantIds": zod.array(zod.string()),
+  "splitMethod": zod.enum(['equal', 'custom']),
+  "shares": zod.record(zod.string(), zod.number()).optional(),
+  "notes": zod.string().optional(),
+  "revision": zod.number().optional()
+})
+
+export const EditTripExpenseResponse = zod.object({
+  "currency": zod.string(),
+  "currencyLocked": zod.boolean(),
+  "expenses": zod.array(zod.object({
+  "title": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "category": zod.enum(['Food', 'Accommodation', 'Transportation', 'Activities', 'Shopping', 'Other']),
+  "date": zod.string(),
+  "payerId": zod.string(),
+  "participantIds": zod.array(zod.string()),
+  "splitMethod": zod.enum(['equal', 'custom']),
+  "shares": zod.record(zod.string(), zod.number()).optional(),
+  "notes": zod.string().optional(),
+  "revision": zod.number().optional()
+}).and(zod.object({
+  "id": zod.string(),
+  "tripId": zod.string(),
+  "creatorId": zod.string(),
+  "editorId": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "deletedAt": zod.string().optional(),
+  "shares": zod.record(zod.string(), zod.number()),
+  "revision": zod.number()
+}))),
+  "settlements": zod.array(zod.object({
+  "fromId": zod.string(),
+  "toId": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "date": zod.string()
+}).and(zod.object({
+  "id": zod.string(),
+  "tripId": zod.string(),
+  "creatorId": zod.string(),
+  "createdAt": zod.string(),
+  "status": zod.enum(['completed'])
+}))),
+  "members": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "paidMinor": zod.number(),
+  "shareMinor": zod.number(),
+  "balanceMinor": zod.number(),
+  "isCurrentMember": zod.boolean()
+})),
+  "totalMinor": zod.number(),
+  "repayments": zod.array(zod.object({
+  "fromId": zod.string(),
+  "toId": zod.string(),
+  "amountMinor": zod.number()
+}))
+})
+
+
+export const DeleteTripExpenseParams = zod.object({
+  "tripId": zod.coerce.string(),
+  "expenseId": zod.coerce.string()
+})
+
+export const DeleteTripExpenseBody = zod.object({
+  "revision": zod.number()
+})
+
+export const DeleteTripExpenseResponse = zod.object({
+  "currency": zod.string(),
+  "currencyLocked": zod.boolean(),
+  "expenses": zod.array(zod.object({
+  "title": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "category": zod.enum(['Food', 'Accommodation', 'Transportation', 'Activities', 'Shopping', 'Other']),
+  "date": zod.string(),
+  "payerId": zod.string(),
+  "participantIds": zod.array(zod.string()),
+  "splitMethod": zod.enum(['equal', 'custom']),
+  "shares": zod.record(zod.string(), zod.number()).optional(),
+  "notes": zod.string().optional(),
+  "revision": zod.number().optional()
+}).and(zod.object({
+  "id": zod.string(),
+  "tripId": zod.string(),
+  "creatorId": zod.string(),
+  "editorId": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "deletedAt": zod.string().optional(),
+  "shares": zod.record(zod.string(), zod.number()),
+  "revision": zod.number()
+}))),
+  "settlements": zod.array(zod.object({
+  "fromId": zod.string(),
+  "toId": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "date": zod.string()
+}).and(zod.object({
+  "id": zod.string(),
+  "tripId": zod.string(),
+  "creatorId": zod.string(),
+  "createdAt": zod.string(),
+  "status": zod.enum(['completed'])
+}))),
+  "members": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "paidMinor": zod.number(),
+  "shareMinor": zod.number(),
+  "balanceMinor": zod.number(),
+  "isCurrentMember": zod.boolean()
+})),
+  "totalMinor": zod.number(),
+  "repayments": zod.array(zod.object({
+  "fromId": zod.string(),
+  "toId": zod.string(),
+  "amountMinor": zod.number()
+}))
+})
+
+
+export const RecordTripSettlementParams = zod.object({
+  "tripId": zod.coerce.string()
+})
+
+export const RecordTripSettlementBody = zod.object({
+  "fromId": zod.string(),
+  "toId": zod.string(),
+  "amountMinor": zod.number(),
+  "currency": zod.string(),
+  "date": zod.string()
 })
 
 

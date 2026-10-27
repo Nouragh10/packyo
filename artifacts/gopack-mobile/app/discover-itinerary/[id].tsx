@@ -17,9 +17,18 @@ import { WikiImage } from "@/components/WikiImage";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import {
+  AccommodationSuggestion,
   PublicItineraryActivity,
   PublicItineraryDay,
+  removeSavedActivity,
   removeSavedPublicDestination,
+  removeSavedStay,
+  saveActivity,
+  savedActivityKey,
+  savedStayKey,
+  saveStay,
+  useSavedActivities,
+  useSavedStays,
   savePublicDestination,
   useSavedDestinations,
   usePublicReview,
@@ -47,18 +56,32 @@ function DestinationPhoto({
   );
 }
 
+type SaveControl = {
+  isSaved: (key: string) => boolean;
+  isPending: (key: string) => boolean;
+  toggle: (key: string, day: PublicItineraryDay, activity: PublicItineraryActivity) => void;
+  reviewId: string;
+};
+
 function ActivityRow({
   activity,
   colors,
   isLast,
+  day,
+  save,
 }: {
   activity: PublicItineraryActivity;
   colors: ReturnType<typeof useColors>;
   isLast: boolean;
+  day: PublicItineraryDay;
+  save: SaveControl;
 }) {
   const category = activity.category
     ? activity.category.charAt(0).toUpperCase() + activity.category.slice(1)
     : "";
+  const key = savedActivityKey(save.reviewId, day.day, activity);
+  const saved = save.isSaved(key);
+  const pending = save.isPending(key);
   const hasCost = typeof activity.estimatedCost === "number";
 
   return (
@@ -76,6 +99,31 @@ function ActivityRow({
             <Text style={[styles.activityCategory, { color: colors.primary, backgroundColor: colors.primary + "15" }]}>
               {category}
             </Text>
+          ) : null}
+          <View style={{ flex: 1 }} />
+          {activity.name ? (
+            <Pressable
+              onPress={() => save.toggle(key, day, activity)}
+              disabled={pending}
+              hitSlop={8}
+              testID={`discover-save-activity-${key}`}
+              accessibilityRole="button"
+              accessibilityLabel={saved ? `Remove ${activity.name} from saved activities` : `Save ${activity.name}`}
+              accessibilityState={{ selected: saved, busy: pending }}
+              style={[
+                styles.activitySave,
+                { borderColor: colors.primary, backgroundColor: saved ? colors.primary : "transparent", opacity: pending ? 0.6 : 1 },
+              ]}
+            >
+              {pending ? (
+                <ActivityIndicator size="small" color={saved ? "#fff" : colors.primary} />
+              ) : (
+                <Feather name={saved ? "check" : "bookmark"} size={12} color={saved ? "#fff" : colors.primary} />
+              )}
+              <Text style={[styles.activitySaveText, { color: saved ? "#fff" : colors.primary }]}>
+                {saved ? "Saved" : "Save"}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
         <Text style={[styles.activityName, { color: colors.foreground }]}>
@@ -99,9 +147,11 @@ function ActivityRow({
 function DaySection({
   day,
   colors,
+  save,
 }: {
   day: PublicItineraryDay;
   colors: ReturnType<typeof useColors>;
+  save: SaveControl;
 }) {
   return (
     <View style={styles.daySection}>
@@ -125,6 +175,8 @@ function DaySection({
             activity={activity}
             colors={colors}
             isLast={index === day.activities.length - 1}
+            day={day}
+            save={save}
           />
         ))
       ) : (
@@ -153,6 +205,71 @@ export default function DiscoverItineraryPreviewScreen() {
   const bottomInset = Platform.OS === "web" ? 34 : insets.bottom + 20;
   const persistedSaved = !!id && savedDestinations.some((saved) => saved.id === id);
   const isSaved = saveStateOverride ?? persistedSaved;
+  const { savedActivities } = useSavedActivities(user?.uid);
+  const { savedStays } = useSavedStays(user?.uid);
+  const [pendingKeys, setPendingKeys] = React.useState<Record<string, boolean>>({});
+  const pendingRef = React.useRef<Record<string, boolean>>({});
+  const [itemError, setItemError] = React.useState("");
+  const savedActivityIds = React.useMemo(() => new Set(savedActivities.map((a) => a.id)), [savedActivities]);
+  const savedStayIds = React.useMemo(() => new Set(savedStays.map((s) => s.id)), [savedStays]);
+
+  const uidForState = user?.uid ?? null;
+  React.useEffect(() => {
+    // Identity changed: drop pending/override/error state from the previous account.
+    pendingRef.current = {};
+    setPendingKeys({});
+    setItemError("");
+    setSaveError("");
+    setSaveStateOverride(null);
+  }, [uidForState]);
+  const currentUidRef = React.useRef(uidForState);
+  currentUidRef.current = uidForState;
+
+  const runItem = async (key: string, action: () => Promise<unknown>) => {
+    if (pendingRef.current[key]) return;
+    if (!user) {
+      setItemError("Sign in to save activities and stays.");
+      return;
+    }
+    pendingRef.current[key] = true;
+    setPendingKeys((p) => ({ ...p, [key]: true }));
+    setItemError("");
+    const startedUid = user.uid;
+    try {
+      await action();
+    } catch {
+      if (currentUidRef.current === startedUid) setItemError("We couldn't update your saved items. Please try again.");
+    } finally {
+      if (currentUidRef.current !== startedUid) return;
+      delete pendingRef.current[key];
+      setPendingKeys((p) => {
+        const next = { ...p };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
+  const activitySave: SaveControl = {
+    reviewId: id ?? "",
+    isSaved: (key) => savedActivityIds.has(key),
+    isPending: (key) => !!pendingKeys[key],
+    toggle: (key, day, activity) => {
+      if (!review || !user) return void runItem(key, async () => {});
+      const uid = user.uid;
+      runItem(key, () =>
+        savedActivityIds.has(key) ? removeSavedActivity(uid, key) : saveActivity(uid, review, day, activity),
+      );
+    },
+  };
+
+  const toggleStay = (stay: AccommodationSuggestion) => {
+    if (!review || !id) return;
+    const key = savedStayKey(id, stay);
+    if (!user) return void runItem(key, async () => {});
+    const uid = user.uid;
+    runItem(key, () => (savedStayIds.has(key) ? removeSavedStay(uid, key) : saveStay(uid, review, stay)));
+  };
 
   React.useEffect(() => {
     setSaveStateOverride(null);
@@ -304,6 +421,53 @@ export default function DiscoverItineraryPreviewScreen() {
         </Pressable>
         {saveError ? <Text style={[styles.saveError, { color: colors.primary }]}>{saveError}</Text> : null}
 
+        {review.confirmedAccommodation ? (() => {
+          const stay = review.confirmedAccommodation;
+          const stayKey = savedStayKey(review.id, stay);
+          const staySaved = savedStayIds.has(stayKey);
+          const stayPending = !!pendingKeys[stayKey];
+          return (
+            <View style={[styles.stayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.stayEyebrow, { color: colors.mutedForeground }]}>WHERE THEY STAYED</Text>
+              <View style={styles.stayRow}>
+                <View style={[styles.stayIcon, { backgroundColor: colors.primary + "14" }]}>
+                  <Feather name="home" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.stayName, { color: colors.foreground }]} numberOfLines={2}>{stay.name}</Text>
+                  <Text style={[styles.stayMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+                    {[stay.type === "other" ? "Stay" : stay.type.charAt(0).toUpperCase() + stay.type.slice(1), stay.location, stay.rating > 0 ? `${stay.rating.toFixed(1)} rating` : ""].filter(Boolean).join(" · ")}
+                  </Text>
+                </View>
+              </View>
+              {stay.totalCost > 0 && stay.nights > 0 ? (
+                <Text style={[styles.stayMeta, { color: colors.mutedForeground }]}>
+                  Past-trip price: about ${Math.round(stay.totalCost / stay.nights)}/night. Prices will be re-estimated for your dates and group.
+                </Text>
+              ) : null}
+              <Pressable
+                onPress={() => toggleStay(stay)}
+                disabled={stayPending}
+                testID="discover-save-stay-button"
+                accessibilityRole="button"
+                accessibilityLabel={staySaved ? `Remove ${stay.name} from saved stays` : `Save ${stay.name} to your stays`}
+                accessibilityState={{ selected: staySaved, busy: stayPending }}
+                style={[styles.staySave, { borderColor: colors.primary, backgroundColor: staySaved ? colors.primary : "transparent", opacity: stayPending ? 0.6 : 1 }]}
+              >
+                {stayPending ? (
+                  <ActivityIndicator size="small" color={staySaved ? "#fff" : colors.primary} />
+                ) : (
+                  <Feather name={staySaved ? "check" : "bookmark"} size={14} color={staySaved ? "#fff" : colors.primary} />
+                )}
+                <Text style={[styles.staySaveText, { color: staySaved ? "#fff" : colors.primary }]}>
+                  {staySaved ? "Saved to stays" : "Save this stay"}
+                </Text>
+              </Pressable>
+            </View>
+          );
+        })() : null}
+        {itemError ? <Text style={[styles.saveError, { color: colors.primary }]}>{itemError}</Text> : null}
+
         {(review.highlight || review.text || review.vibes.length > 0) && (
           <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {review.highlight ? (
@@ -332,12 +496,12 @@ export default function DiscoverItineraryPreviewScreen() {
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>The itinerary</Text>
           <View style={styles.readOnly}>
             <Feather name="eye" size={12} color={colors.mutedForeground} />
-            <Text style={[styles.readOnlyText, { color: colors.mutedForeground }]}>Read only</Text>
+            <Text style={[styles.readOnlyText, { color: colors.mutedForeground }]}>Save what you like</Text>
           </View>
         </View>
 
         {days.length > 0 ? (
-          days.map((day) => <DaySection key={day.day} day={day} colors={colors} />)
+          days.map((day) => <DaySection key={day.day} day={day} colors={colors} save={activitySave} />)
         ) : (
           <View style={[styles.noItinerary, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="calendar" size={28} color={colors.mutedForeground} />
@@ -436,6 +600,16 @@ const styles = StyleSheet.create({
   activityMeta: { flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 4 },
   activityTime: { fontFamily: "DmSans_600SemiBold", fontSize: 11 },
   activityCategory: { fontFamily: "DmSans_600SemiBold", fontSize: 10, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  activitySave: { flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 3, minHeight: 24 },
+  activitySaveText: { fontFamily: "DmSans_700Bold", fontSize: 11 },
+  stayCard: { marginHorizontal: 16, marginBottom: 18, padding: 14, borderRadius: 14, borderWidth: 1, gap: 10 },
+  stayEyebrow: { fontFamily: "DmSans_700Bold", fontSize: 10, letterSpacing: 1.2 },
+  stayRow: { flexDirection: "row", alignItems: "center", gap: 11 },
+  stayIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  stayName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 17, lineHeight: 22 },
+  stayMeta: { fontFamily: "DmSans_400Regular", fontSize: 12, marginTop: 2 },
+  staySave: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1, borderRadius: 12, paddingVertical: 10 },
+  staySaveText: { fontFamily: "DmSans_700Bold", fontSize: 13 },
   activityName: { fontFamily: "PlayfairDisplay_700Bold", fontSize: 17, lineHeight: 22 },
   activityDescription: { fontFamily: "DmSans_400Regular", fontSize: 12, lineHeight: 17, marginTop: 4 },
   activityCost: { fontFamily: "DmSans_600SemiBold", fontSize: 11, marginTop: 7 },

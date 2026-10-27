@@ -25,8 +25,12 @@ import {
   usePacks,
   usePackyoProfile,
   useProfileTripCollections,
+  removeSavedActivity,
+  removeSavedStay,
   useRecentWishes,
+  useSavedActivities,
   useSavedDestinations,
+  useSavedStays,
   useTrips,
 } from "@/hooks/useFirebase";
 import { signOut, storage, updateCurrentUserPhoto } from "@/lib/firebase";
@@ -133,7 +137,28 @@ export default function ProfileScreen() {
   const { packs } = usePacks(user?.uid);
   const { wishes } = useRecentWishes(user?.uid, trips.map((trip) => trip.id));
   const { profile } = usePackyoProfile(user?.uid);
-  const { stays, activities, memories } = useProfileTripCollections(trips, user?.displayName, user?.uid);
+  const { memories } = useProfileTripCollections(trips, user?.displayName, user?.uid);
+  const { savedStays: stays, loading: staysLoading } = useSavedStays(user?.uid);
+  const { savedActivities: activities, loading: activitiesLoading } = useSavedActivities(user?.uid);
+  const [removingItem, setRemovingItem] = React.useState<string | null>(null);
+  const [itemError, setItemError] = React.useState("");
+  React.useEffect(() => {
+    setRemovingItem(null);
+    setItemError("");
+  }, [user?.uid]);
+  const removeItem = async (kind: "stay" | "activity", key: string) => {
+    if (!user || removingItem) return;
+    setRemovingItem(key);
+    setItemError("");
+    try {
+      if (kind === "stay") await removeSavedStay(user.uid, key);
+      else await removeSavedActivity(user.uid, key);
+    } catch {
+      setItemError("We couldn't remove that saved item. Please try again.");
+    } finally {
+      setRemovingItem(null);
+    }
+  };
   const { savedDestinations, loading: savedDestinationsLoading } = useSavedDestinations(user?.uid);
   const [removingSavedId, setRemovingSavedId] = React.useState<string | null>(null);
   const [savedError, setSavedError] = React.useState("");
@@ -556,80 +581,110 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionHeading title="My stays" colors={colors} />
-          {stays.length === 0 ? (
+          <SectionHeading
+            title="Saved stays"
+            action={stays.length > 0 ? "See all" : undefined}
+            onAction={stays.length > 0 ? () => router.push({ pathname: "/saved", params: { section: "stays" } } as any) : undefined}
+            colors={colors}
+          />
+          {staysLoading ? (
+            <ActivityIndicator color={colors.primary} style={{ paddingVertical: 18 }} />
+          ) : stays.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Feather name="home" size={22} color={colors.mutedForeground} />
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No stays saved yet</Text>
               <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-                Confirm an accommodation in a trip and it will appear here.
+                Save a stay from a Discover itinerary to suggest it to your pack later.
               </Text>
             </View>
           ) : (
-            stays.map((stay, index) => (
-              <Pressable
-                key={stay.id}
-                onPress={() => router.push(`/trip/${stay.tripId}` as any)}
-                style={({ pressed }) => [styles.stayRow, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}
-              >
-                <View style={styles.stayImageWrap}>
-                  <WikiImage
-                    name={stay.accommodation.name}
-                    context={stay.accommodation.location || stay.destination}
-                    query={`${stay.accommodation.name} hotel ${stay.destination}`}
-                    initialUri={(stay.accommodation.photos ?? [])[0]}
-                    fallbackCategory="stay"
-                    fallbackIndex={index}
-                    style={styles.stayImage}
-                  />
-                </View>
-                <View style={styles.wishContent}>
-                  <Text style={[styles.wishText, { color: colors.foreground }]} numberOfLines={1}>{stay.accommodation.name}</Text>
-                  <Text style={[styles.wishMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {stay.destination} · {stay.accommodation.type}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={15} color={colors.mutedForeground} />
-              </Pressable>
+            stays.slice(0, 3).map((stay, index) => (
+              <View key={stay.id} style={[styles.stayRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Pressable
+                  onPress={() => stay.reviewId && router.push(`/discover-itinerary/${stay.reviewId}` as any)}
+                  style={({ pressed }) => [{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <View style={styles.stayImageWrap}>
+                    <WikiImage
+                      name={stay.accommodation.name}
+                      context={stay.accommodation.location || stay.destination}
+                      query={`${stay.accommodation.name} hotel ${stay.destination}`}
+                      initialUri={(stay.accommodation.photos ?? [])[0]}
+                      fallbackCategory="stay"
+                      fallbackIndex={index}
+                      style={styles.stayImage}
+                    />
+                  </View>
+                  <View style={styles.wishContent}>
+                    <Text style={[styles.wishText, { color: colors.foreground }]} numberOfLines={1}>{stay.accommodation.name}</Text>
+                    <Text style={[styles.wishMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {stay.destination.split(",")[0]} · {stay.accommodation.type === "other" ? "Stay" : stay.accommodation.type}
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => removeItem("stay", stay.id)}
+                  disabled={removingItem === stay.id}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${stay.accommodation.name} from saved stays`}
+                  style={{ padding: 4, opacity: removingItem === stay.id ? 0.4 : 1 }}
+                >
+                  <Feather name="x" size={15} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
             ))
           )}
         </View>
 
         <View style={styles.section}>
           <SectionHeading
-            title="Suggested activities"
+            title="Saved activities"
             action={activities.length > 3 ? (showAllActivities ? "Show less" : "See all") : undefined}
             onAction={activities.length > 3 ? () => setShowAllActivities((current) => !current) : undefined}
             colors={colors}
           />
-          {activities.length === 0 ? (
+          {activitiesLoading ? (
+            <ActivityIndicator color={colors.primary} style={{ paddingVertical: 18 }} />
+          ) : activities.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Feather name="compass" size={22} color={colors.mutedForeground} />
-              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No activity suggestions yet</Text>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No saved activities yet</Text>
               <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-                Your wish-based itinerary picks will show up here.
+                Save activities from Discover itineraries and add them as wishes on your next trip.
               </Text>
             </View>
           ) : (
             (showAllActivities ? activities : activities.slice(0, 3)).map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => router.push(`/itinerary/${item.tripId}` as any)}
-                style={({ pressed }) => [styles.wishRow, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}
-              >
-                <View style={[styles.wishIcon, { backgroundColor: colors.primary + "14" }]}>
-                  <Feather name="map-pin" size={14} color={colors.primary} />
-                </View>
-                <View style={styles.wishContent}>
-                  <Text style={[styles.wishText, { color: colors.foreground }]} numberOfLines={1}>{item.activity.name}</Text>
-                  <Text style={[styles.wishMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
-                    {item.destination} · Day {item.dayNumber}
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={15} color={colors.mutedForeground} />
-              </Pressable>
+              <View key={item.id} style={[styles.wishRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Pressable
+                  onPress={() => item.reviewId && router.push(`/discover-itinerary/${item.reviewId}` as any)}
+                  style={({ pressed }) => [{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, opacity: pressed ? 0.8 : 1 }]}
+                >
+                  <View style={[styles.wishIcon, { backgroundColor: colors.primary + "14" }]}>
+                    <Feather name="map-pin" size={14} color={colors.primary} />
+                  </View>
+                  <View style={styles.wishContent}>
+                    <Text style={[styles.wishText, { color: colors.foreground }]} numberOfLines={1}>{item.name}</Text>
+                    <Text style={[styles.wishMeta, { color: colors.mutedForeground }]} numberOfLines={1}>
+                      {item.destination.split(",")[0]} · {item.category}
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable
+                  onPress={() => removeItem("activity", item.id)}
+                  disabled={removingItem === item.id}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${item.name} from saved activities`}
+                  style={{ padding: 4, opacity: removingItem === item.id ? 0.4 : 1 }}
+                >
+                  <Feather name="x" size={15} color={colors.mutedForeground} />
+                </Pressable>
+              </View>
             ))
           )}
+          {itemError ? <Text style={[styles.savedError, { color: colors.primary }]}>{itemError}</Text> : null}
         </View>
 
         <View style={[styles.yearCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

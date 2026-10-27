@@ -5,6 +5,108 @@
  * GoPack AI Group Travel Planner API
  * OpenAPI spec version: 0.1.0
  */
+export interface ExpenseDeletionInput {
+  revision: number;
+}
+
+export type ExpenseInputCategory = typeof ExpenseInputCategory[keyof typeof ExpenseInputCategory];
+
+
+export const ExpenseInputCategory = {
+  Food: 'Food',
+  Accommodation: 'Accommodation',
+  Transportation: 'Transportation',
+  Activities: 'Activities',
+  Shopping: 'Shopping',
+  Other: 'Other',
+} as const;
+
+export type ExpenseInputSplitMethod = typeof ExpenseInputSplitMethod[keyof typeof ExpenseInputSplitMethod];
+
+
+export const ExpenseInputSplitMethod = {
+  equal: 'equal',
+  custom: 'custom',
+} as const;
+
+export type ExpenseInputShares = {[key: string]: number};
+
+export interface ExpenseInput {
+  title: string;
+  amountMinor: number;
+  currency: string;
+  category: ExpenseInputCategory;
+  date: string;
+  payerId: string;
+  participantIds: string[];
+  splitMethod: ExpenseInputSplitMethod;
+  shares?: ExpenseInputShares;
+  notes?: string;
+  revision?: number;
+}
+
+export type ExpenseRecordShares = {[key: string]: number};
+
+export type ExpenseRecord = ExpenseInput & {
+  id: string;
+  tripId: string;
+  creatorId: string;
+  editorId: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string;
+  shares: ExpenseRecordShares;
+  revision: number;
+};
+
+export interface SettlementInput {
+  fromId: string;
+  toId: string;
+  amountMinor: number;
+  currency: string;
+  date: string;
+}
+
+export type SettlementRecordStatus = typeof SettlementRecordStatus[keyof typeof SettlementRecordStatus];
+
+
+export const SettlementRecordStatus = {
+  completed: 'completed',
+} as const;
+
+export type SettlementRecord = SettlementInput & {
+  id: string;
+  tripId: string;
+  creatorId: string;
+  createdAt: string;
+  status: SettlementRecordStatus;
+};
+
+export interface ExpenseMemberBalance {
+  id: string;
+  name: string;
+  paidMinor: number;
+  shareMinor: number;
+  balanceMinor: number;
+  isCurrentMember: boolean;
+}
+
+export interface ExpenseRepayment {
+  fromId: string;
+  toId: string;
+  amountMinor: number;
+}
+
+export interface ExpenseLedger {
+  currency: string;
+  currencyLocked: boolean;
+  expenses: ExpenseRecord[];
+  settlements: SettlementRecord[];
+  members: ExpenseMemberBalance[];
+  totalMinor: number;
+  repayments: ExpenseRepayment[];
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -14,6 +116,8 @@ export interface ErrorResponse {
 }
 
 export interface Wish {
+  id?: string;
+  wishId?: string;
   text: string;
   author: string;
   votes: number;
@@ -33,8 +137,12 @@ export interface ItineraryInput {
      * @nullable
      */
   startDate?: string | null;
-  /** Group wishes sorted by votes */
-  wishes: Wish[];
+  /** Legacy group wishes sorted by votes */
+  wishes?: Wish[];
+  /** Wishes that must appear in the itinerary */
+  guaranteed?: Wish[];
+  /** Wishes to include when slots allow */
+  candidates?: Wish[];
 }
 
 export interface Activity {

@@ -32,6 +32,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { WikiImage } from "@/components/WikiImage";
 import { apiFetch } from "@/lib/api-client";
+import { accommodationBallot } from "@/lib/accommodation-ballot";
 import { sendTripPush } from "@/lib/push-notifications";
 import {
   AccommodationSuggestion,
@@ -367,6 +368,7 @@ interface CardProps {
   votes: Record<string, "up" | "down">;
   members: Record<string, { name: string }>;
   isWinning: boolean;
+  canBook: boolean;
   hasQuorum: boolean;
   isCreator: boolean;
   colors: any;
@@ -374,7 +376,7 @@ interface CardProps {
 }
 
 function AccommodationCard({
-  suggestion, idx, tripId, uid, votes, members, isWinning, hasQuorum, isCreator, colors, onConfirm,
+  suggestion, idx, tripId, uid, votes, members, isWinning, canBook, hasQuorum, isCreator, colors, onConfirm,
 }: CardProps) {
   const upVoters = Object.entries(votes).filter(([, v]) => v === "up");
   const downVoters = Object.entries(votes).filter(([, v]) => v === "down");
@@ -502,7 +504,7 @@ function AccommodationCard({
           <Text style={[styles.voterNames, { color: colors.mutedForeground }]} numberOfLines={1}>{downNames.join(", ")}</Text>
         </View>
       )}
-      {isCreator && winner && (
+      {isCreator && winner && canBook && (
         <Pressable onPress={onConfirm} style={[styles.confirmBtn, { backgroundColor: TEAL }]}>
           <Feather name="check" size={16} color="#fff" />
           <Text style={styles.confirmBtnText}>Book this one</Text>
@@ -539,7 +541,7 @@ export default function AccommodationVoteScreen() {
   const lockedBy = trip?.accommodationLockedBy ?? {};
   const members = trip?.members ?? {};
   const memberCount = Object.keys(members).length;
-  const lockedCount = Object.keys(lockedBy).length;
+  const lockedCount = Object.keys(members).filter(uid => lockedBy[uid] === true).length;
   const allLocked = memberCount > 0 && lockedCount >= memberCount;
   const myLocked = !!lockedBy[user?.uid ?? ""];
   const isCreator = trip?.hostMemberId === user?.uid;
@@ -549,7 +551,7 @@ export default function AccommodationVoteScreen() {
   const hasQuorum = lockedCount >= participationThreshold;
 
   const getVotesForIdx = (idx: number): Record<string, "up" | "down"> =>
-    (allVotes[idx] ?? {}) as Record<string, "up" | "down">;
+    Object.fromEntries(Object.entries(allVotes[idx] ?? {}).filter(([uid]) => !!members[uid])) as Record<string, "up" | "down">;
 
   const getScore = (idx: number) => {
     const v = getVotesForIdx(idx);
@@ -558,8 +560,9 @@ export default function AccommodationVoteScreen() {
     return up - down;
   };
 
-  const winnerIdx = suggestions.reduce((best, _, idx) =>
-    getScore(idx) > getScore(best) ? idx : best, 0);
+  const ballot = accommodationBallot(trip);
+  const winnerIdx = ballot.validDecision?.suggestionIndex ?? ballot.tiedIndices[0] ?? 0;
+  const unresolvedTie = hasQuorum && ballot.tiedIndices.length > 1 && !ballot.validDecision;
 
   const handleAutoLock = async () => {
     if (!user || !id) return;
@@ -584,7 +587,7 @@ export default function AccommodationVoteScreen() {
   };
 
   const handleConfirm = async () => {
-    if (!id || !suggestions[winnerIdx]) return;
+    if (!id || !isCreator || !hasQuorum || unresolvedTie || !suggestions[winnerIdx] || confirming) return;
     setConfirming(true);
     try {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -624,53 +627,20 @@ export default function AccommodationVoteScreen() {
   };
 
   const handleAiTiebreak = async () => {
-    if (!id || !trip) return;
-    const currentTopScore = getScore(winnerIdx);
-    const tiedOptions = suggestions
-      .map((s, i) => ({ ...s, origIdx: i }))
-      .filter((_, i) => getScore(i) === currentTopScore);
+    if (!id || !trip || !user || !isCreator || !unresolvedTie || breaking) return;
     setBreaking(true);
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       const res = await apiFetch("/api/ai-pick-accommodation", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          suggestions: tiedOptions.map((s) => ({
-            name: s.name, type: s.type, location: s.location,
-            costPerPerson: s.costPerPerson, whyItFits: s.whyItFits,
-          })),
-          destination: trip.destination,
-          memberCount,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` },
+        body: JSON.stringify({ tripId: id }),
       });
-      if (!res.ok) throw new Error("AI could not decide");
-      const result = await res.json() as { winnerIdx: number; reason: string };
-      const picked = tiedOptions[result.winnerIdx];
-      Alert.alert(
-        "AI Tiebreaker",
-        `AI picks: ${picked?.name ?? "Unknown"}\n\n"${result.reason}"`,
-        [
-          { text: "Keep voting", style: "cancel" },
-          isCreator && picked
-            ? {
-                text: "Confirm this pick",
-                onPress: async () => {
-                  await confirmAccommodation(id, suggestions[picked.origIdx]);
-                  await sendTripPush(
-                    id,
-                    `${suggestions[picked.origIdx].name} is your confirmed stay`,
-                    "Open Packyo to see the winning accommodation.",
-                    `/trip/${id}`,
-                  );
-                  router.replace(`/trip/${id}`);
-                },
-              }
-            : { text: "OK" },
-        ].filter(Boolean) as any,
-      );
-    } catch {
-      Alert.alert("Error", "Could not break the tie. Please try again.");
+      const result = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(result.error ?? "Packyo could not decide.");
+      // The shared realtime decision updates all members; booking remains explicit.
+    } catch (err) {
+      Alert.alert("Couldn't break the tie", err instanceof Error ? err.message : "Please try again.");
     } finally {
       setBreaking(false);
     }
@@ -736,9 +706,7 @@ export default function AccommodationVoteScreen() {
     );
   }
 
-  const topScore = getScore(winnerIdx);
-  const isTied = hasQuorum && suggestions.length > 1 &&
-    suggestions.filter((_, i) => getScore(i) === topScore).length > 1;
+  const isTied = unresolvedTie;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -804,14 +772,14 @@ export default function AccommodationVoteScreen() {
           <Pressable
             onPress={handleUnlock}
             disabled={locking}
-            style={[styles.lockBtn, { backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border }]}
+            style={[styles.lockBtn, { backgroundColor: colors.primary, borderWidth: 1, borderColor: colors.primary }]}
           >
             {locking
-              ? <ActivityIndicator color={colors.mutedForeground} size="small" />
+              ? <ActivityIndicator color="#fff" size="small" />
               : (
                 <>
-                  <Feather name="refresh-cw" size={14} color={colors.mutedForeground} />
-                  <Text style={[styles.lockBtnText, { color: colors.mutedForeground }]}>Re-vote</Text>
+                  <Feather name="refresh-cw" size={14} color="#fff" />
+                  <Text style={[styles.lockBtnText, { color: "#fff" }]}>Re-vote</Text>
                 </>
               )}
           </Pressable>
@@ -834,6 +802,11 @@ export default function AccommodationVoteScreen() {
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: bottomInset + 20 }}
         >
           {isTied && (
+            <Text style={{ color: colors.foreground, fontFamily: "DmSans_600SemiBold" }}>
+              These stays are tied for the winning vote. {isCreator ? "Let Packyo choose between them, or re-vote." : "The trip creator can ask Packyo to break the vote."}
+            </Text>
+          )}
+          {isTied && isCreator && (
             <Pressable
               onPress={handleAiTiebreak}
               disabled={breaking}
@@ -844,10 +817,15 @@ export default function AccommodationVoteScreen() {
               ) : (
                 <>
                   <Feather name="zap" size={16} color="#7E57C2" />
-                  <Text style={[styles.aiTieBtnText, { color: "#7E57C2" }]}>Too close to call — let AI break the tie</Text>
+                  <Text style={[styles.aiTieBtnText, { color: "#7E57C2" }]}>Let Packyo break the vote</Text>
                 </>
               )}
             </Pressable>
+          )}
+          {ballot.validDecision && (
+            <Text style={{ color: colors.foreground, fontFamily: "DmSans_500Medium" }}>
+              Packyo chose {suggestions[winnerIdx]?.name}: {ballot.validDecision.reason}
+            </Text>
           )}
 
           {hasQuorum && !isCreator && !isTied && (
@@ -878,7 +856,8 @@ export default function AccommodationVoteScreen() {
                 uid={user?.uid ?? ""}
                 votes={getVotesForIdx(i)}
                 members={members}
-                isWinning={i === winnerIdx}
+                isWinning={unresolvedTie ? ballot.tiedIndices.includes(i) : i === winnerIdx}
+                canBook={!unresolvedTie && !confirming}
                 hasQuorum={hasQuorum}
                 isCreator={isCreator}
                 colors={colors}

@@ -8,6 +8,16 @@
 
 export * from './activity';
 export * from './errorResponse';
+export * from './expenseDeletionInput';
+export * from './expenseInput';
+export * from './expenseInputCategory';
+export * from './expenseInputShares';
+export * from './expenseInputSplitMethod';
+export * from './expenseLedger';
+export * from './expenseMemberBalance';
+export * from './expenseRecord';
+export * from './expenseRecordShares';
+export * from './expenseRepayment';
 export * from './healthStatus';
 export * from './itineraryDay';
 export * from './itineraryInput';
@@ -15,4 +25,7 @@ export * from './itineraryResult';
 export * from './packingInput';
 export * from './packingList';
 export * from './packingResult';
+export * from './settlementInput';
+export * from './settlementRecord';
+export * from './settlementRecordStatus';
 export * from './wish';

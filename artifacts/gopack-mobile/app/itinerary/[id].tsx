@@ -49,6 +49,8 @@ import {
 } from "@/hooks/useFirebase";
 import { Mascot } from "@/components/Mascot";
 import { WikiImage } from "@/components/WikiImage";
+import { TripExpenses } from "@/components/TripExpenses";
+import { TripOverview } from "@/components/TripOverview";
 
 const MEMBER_COLORS = ["#F15A3A", "#F4BC55", "#A77BD6", "#68B7A0", "#EE9D54", "#6EA6D8"];
 
@@ -1077,7 +1079,7 @@ export default function ItineraryScreen() {
   const { trip, loading } = useTrip(id);
   const wishes = useWishes(id);
 
-  const [activeTab, setActiveTab] = useState<"itinerary" | "info" | "map" | "packing">("itinerary");
+  const [activeTab, setActiveTab] = useState<"overview" | "itinerary" | "expenses" | "info" | "map" | "packing">("overview");
   const [editModal, setEditModal] = useState<EditState | null>(null);
   const [addChoiceDay, setAddChoiceDay] = useState<number | null>(null);
   const [mapImport, setMapImport] = useState<MapImportState | null>(null);
@@ -1661,7 +1663,7 @@ export default function ItineraryScreen() {
           style={styles.headerTabs}
           contentContainerStyle={styles.headerTabsContent}
         >
-          {(["itinerary", "info", "map", "packing"] as const).map((t) => {
+          {(["overview", "itinerary", "expenses", "info", "map", "packing"] as const).map((t) => {
             const isActive = activeTab === t;
             return (
               <Pressable
@@ -1714,7 +1716,28 @@ export default function ItineraryScreen() {
         </ScrollView>
       </View>
 
-      {activeTab === "packing" && <PackingListContent id={id} embedded />}
+      {activeTab === "packing" && (
+        <View style={{ flex: 1 }}>
+          <Pressable
+            onPress={() => setActiveTab("expenses")}
+            accessibilityRole="button"
+            style={{ margin: 16, padding: 14, borderRadius: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 10 }}
+          >
+            <Feather name="credit-card" size={18} color="#fff" />
+            <Text style={{ color: "#fff", fontFamily: "DmSans_600SemiBold", flex: 1 }}>Shared expenses</Text>
+            <Feather name="arrow-right" size={18} color="#fff" />
+          </Pressable>
+          <PackingListContent id={id} embedded />
+        </View>
+      )}
+
+      {activeTab === "overview" && (
+        <TripOverview trip={trip} wishes={wishes} currentUid={user?.uid} onOpen={(t) => setActiveTab(t)} />
+      )}
+
+      {activeTab === "expenses" && id && (
+        <TripExpenses trip={trip} tripId={id} onOpenPacking={() => setActiveTab("packing")} />
+      )}
 
       {/* ── INFO TAB ── */}
       {activeTab === "info" && (

@@ -20,11 +20,13 @@ import { apiFetch } from "@/lib/api-client";
 import { sendTripPush } from "@/lib/push-notifications";
 import {
   AccommodationPreference,
+  AccommodationSuggestion,
   setAccommodationStatus,
-  storeAccommodationSuggestions,
+  mergeAiAccommodationSuggestions,
   submitAccommodationPreference,
   useTrip,
 } from "@/hooks/useFirebase";
+import { SavedStaySuggestionPicker } from "@/components/SavedItemPickers";
 
 const TEAL = "#26A69A";
 
@@ -103,6 +105,9 @@ export default function AccommodationPreferencesScreen() {
   const totalMembers = members.length;
   const submittedCount = submittedUids.length;
   const isCreator = trip?.hostMemberId === user?.uid;
+  const rawSuggestions = trip?.accommodationSuggestions as AccommodationSuggestion[] | Record<string, AccommodationSuggestion> | undefined;
+  const existingSuggestions: AccommodationSuggestion[] = Array.isArray(rawSuggestions) ? rawSuggestions : Object.values(rawSuggestions ?? {});
+  const savedSuggestionCount = existingSuggestions.filter((sg) => String(sg?.id ?? "").startsWith("saved-")).length;
 
   const toggleAmenity = (a: string) => {
     setAmenities((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
@@ -176,7 +181,9 @@ export default function AccommodationPreferencesScreen() {
         id: `ai-${Date.now()}-${i}`,
       }));
 
-      await storeAccommodationSuggestions(id, suggestionsWithUniqueIds);
+      // Merged in a transaction against the live list so saved-stay picks
+      // added while the AI was running are never overwritten.
+      await mergeAiAccommodationSuggestions(id, suggestionsWithUniqueIds);
       await sendTripPush(
         id,
         `Vote on stays for ${trip.destination || "your trip"}`,
@@ -311,6 +318,21 @@ export default function AccommodationPreferencesScreen() {
             </Pressable>
           </View>
         )}
+
+        {trip && id ? (
+          <SavedStaySuggestionPicker
+            key={user?.uid ?? "signed-out"}
+            tripId={id}
+            trip={trip}
+            uid={user?.uid}
+            displayName={user?.displayName ?? "Member"}
+          />
+        ) : null}
+        {savedSuggestionCount > 0 ? (
+          <Text style={[styles.generateHint, { color: colors.mutedForeground, paddingHorizontal: 16 }]}>
+            {savedSuggestionCount} saved {savedSuggestionCount === 1 ? "stay is" : "stays are"} ready for the vote and will be kept alongside new options.
+          </Text>
+        ) : null}
 
         {!!error && (
           <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>

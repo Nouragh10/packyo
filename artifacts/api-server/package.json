@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/lib/itinerary-parser.test.ts src/lib/firebase-lists.test.ts"
+    "test": "tsx --test src/lib/itinerary-parser.test.ts src/lib/firebase-lists.test.ts src/lib/expenses.test.ts scripts/mobile-trip-features.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",

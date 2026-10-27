@@ -21,6 +21,10 @@ export interface ItineraryInput {
      * @nullable
      */
   startDate?: string | null;
-  /** Group wishes sorted by votes */
-  wishes: Wish[];
+  /** Legacy group wishes sorted by votes */
+  wishes?: Wish[];
+  /** Wishes that must appear in the itinerary */
+  guaranteed?: Wish[];
+  /** Wishes to include when slots allow */
+  candidates?: Wish[];
 }

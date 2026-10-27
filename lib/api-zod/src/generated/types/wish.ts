@@ -7,6 +7,8 @@
  */
 
 export interface Wish {
+  id?: string;
+  wishId?: string;
   text: string;
   author: string;
   votes: number;

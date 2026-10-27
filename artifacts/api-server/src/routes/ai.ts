@@ -2,6 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { GenerateItineraryBody, GeneratePackingListBody } from "@workspace/api-zod";
 import { getAdminDb, getAdminApp } from "../lib/firebase-admin";
+import { accommodationRanking, type AccommodationBallot } from "../lib/accommodation-votes";
 import { getAuth } from "firebase-admin/auth";
 import {
   InviteCodeReservationError,
@@ -1366,10 +1367,39 @@ Respond with ONLY valid JSON: {"winnerIdx": 0, "reason": "One clear sentence."}`
 
 router.post("/ai-pick-accommodation", async (req: Request, res: Response): Promise<void> => {
   const body = req.body as {
+    tripId?: string;
     suggestions: Array<{ name: string; type: string; location: string; costPerPerson: number; whyItFits: string }>;
     destination: string;
     memberCount: number;
   };
+
+  let ballotKey: string | undefined;
+  let originalIndices: number[] = [];
+  if (body.tripId) {
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(body.tripId)) {
+      res.status(400).json({ error: "Invalid trip." }); return;
+    }
+    const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
+    if (!token) { res.status(401).json({ error: "Sign in first." }); return; }
+    try {
+      const decoded = await getAuth(getAdminApp()).verifyIdToken(token, true);
+      const trip = (await getAdminDb().ref(`trips/${body.tripId}`).get()).val();
+      if (!trip?.members?.[decoded.uid] || trip.hostMemberId !== decoded.uid) {
+        res.status(403).json({ error: "Only the trip creator can request a tiebreak." }); return;
+      }
+      const ranking = accommodationRanking(trip);
+      if (!ranking.hasQuorum || ranking.tiedIndices.length < 2) {
+        res.status(409).json({ error: "The current results are not tied." }); return;
+      }
+      ballotKey = ranking.ballotKey;
+      originalIndices = ranking.tiedIndices;
+      body.suggestions = ranking.tiedIndices.map(index => trip.accommodationSuggestions[index]);
+      body.destination = trip.destination;
+      body.memberCount = Object.keys(trip.members).length;
+    } catch {
+      res.status(401).json({ error: "Could not verify your trip access." }); return;
+    }
+  }
 
   if (!body.suggestions?.length || !body.destination) {
     res.status(400).json({ error: "Missing required fields." });
@@ -1403,7 +1433,24 @@ Respond with ONLY valid JSON: {"winnerIdx": 0, "reason": "One clear sentence."}`
     };
 
     const allText = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
-    const result = extractAndParseJson(allText);
+    const result = extractAndParseJson(allText) as { winnerIdx: number; reason: string };
+    if (!(response as unknown as globalThis.Response).ok || !result || !Number.isInteger(result.winnerIdx) || result.winnerIdx < 0 ||
+        result.winnerIdx >= body.suggestions.length || typeof result.reason !== "string") {
+      throw new Error("Invalid accommodation decision");
+    }
+    if (body.tripId && ballotKey) {
+      const decidedAt = new Date().toISOString();
+      const transaction = await getAdminDb().ref(`trips/${body.tripId}`).transaction((trip: AccommodationBallot | null) => {
+        if (!trip) return null; // Retry a cold local cache against the server value.
+        if (accommodationRanking(trip).ballotKey !== ballotKey) return;
+        return { ...trip, aiAccommodationDecision: {
+          suggestionIndex: originalIndices[result.winnerIdx], reason: result.reason, ballotKey, decidedAt,
+        } };
+      });
+      if (!transaction.committed || !transaction.snapshot.exists()) {
+        res.status(409).json({ error: "Votes changed during the tiebreak. Please try again." }); return;
+      }
+    }
     res.json(result);
   } catch (err) {
     req.log.error({ err }, "Failed to pick accommodation");

@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { addWish, useTrip, useWishes } from "@/hooks/useFirebase";
+import { SavedActivityWishPicker } from "@/components/SavedItemPickers";
 
 /* ── Category detection for thumbnail icon ─────────────────── */
 const CATEGORY_MAP: { keywords: string[]; icon: string; bg: string; color: string }[] = [
@@ -191,6 +192,14 @@ export default function WishlistScreen() {
               <Text style={styles.viewAllBtnText}>View all wishes</Text>
             </Pressable>
           </View>
+          <SavedActivityWishPicker
+            key={user?.uid ?? "signed-out"}
+            tripId={id}
+            trip={trip}
+            wishes={wishes}
+            uid={user?.uid}
+            displayName={user?.displayName ?? "You"}
+          />
         </ScrollView>
 
         {/* Add wish bar */}
@@ -258,6 +267,14 @@ export default function WishlistScreen() {
       >
         {tab === "all" && (
           <>
+            <SavedActivityWishPicker
+            key={user?.uid ?? "signed-out"}
+              tripId={id}
+              trip={trip}
+              wishes={wishes}
+              uid={user?.uid}
+              displayName={user?.displayName ?? "You"}
+            />
             {/* Filter row */}
             <View style={styles.filterRow}>
               <View style={[styles.filterPill, { borderColor: colors.border, backgroundColor: colors.card }]}>

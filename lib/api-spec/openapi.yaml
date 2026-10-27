@@ -91,8 +91,162 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /trips/{tripId}/expenses:
+    parameters:
+      - { name: tripId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTripExpenses
+      summary: Read the member-only expense ledger
+      responses:
+        "200":
+          description: Ledger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseLedger" }
+    post:
+      operationId: addTripExpense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseInput" }
+      responses:
+        "201":
+          description: Saved ledger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseLedger" }
+  /trips/{tripId}/expenses/{expenseId}:
+    parameters:
+      - { name: tripId, in: path, required: true, schema: { type: string } }
+      - { name: expenseId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: editTripExpense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseInput" }
+      responses:
+        "200":
+          description: Saved ledger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseLedger" }
+    delete:
+      operationId: deleteTripExpense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExpenseDeletionInput" }
+      responses:
+        "200":
+          description: Saved ledger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseLedger" }
+  /trips/{tripId}/settlements:
+    parameters:
+      - { name: tripId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: recordTripSettlement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SettlementInput" }
+      responses:
+        "201":
+          description: Saved ledger
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExpenseLedger" }
 components:
   schemas:
+    ExpenseDeletionInput:
+      type: object
+      required: [revision]
+      properties:
+        revision: { type: integer }
+    ExpenseInput:
+      type: object
+      required: [title, amountMinor, currency, category, date, payerId, participantIds, splitMethod]
+      properties:
+        title: { type: string }
+        amountMinor: { type: integer }
+        currency: { type: string }
+        category: { type: string, enum: [Food, Accommodation, Transportation, Activities, Shopping, Other] }
+        date: { type: string }
+        payerId: { type: string }
+        participantIds: { type: array, items: { type: string } }
+        splitMethod: { type: string, enum: [equal, custom] }
+        shares: { type: object, additionalProperties: { type: integer } }
+        notes: { type: string }
+        revision: { type: integer }
+    ExpenseRecord:
+      allOf:
+        - { $ref: "#/components/schemas/ExpenseInput" }
+        - type: object
+          required: [id, tripId, creatorId, editorId, createdAt, updatedAt, shares, revision]
+          properties:
+            id: { type: string }
+            tripId: { type: string }
+            creatorId: { type: string }
+            editorId: { type: string }
+            createdAt: { type: string }
+            updatedAt: { type: string }
+            deletedAt: { type: string }
+            shares: { type: object, additionalProperties: { type: integer } }
+            revision: { type: integer }
+    SettlementInput:
+      type: object
+      required: [fromId, toId, amountMinor, currency, date]
+      properties:
+        fromId: { type: string }
+        toId: { type: string }
+        amountMinor: { type: integer }
+        currency: { type: string }
+        date: { type: string }
+    SettlementRecord:
+      allOf:
+        - { $ref: "#/components/schemas/SettlementInput" }
+        - type: object
+          required: [id, tripId, creatorId, createdAt, status]
+          properties:
+            id: { type: string }
+            tripId: { type: string }
+            creatorId: { type: string }
+            createdAt: { type: string }
+            status: { type: string, enum: [completed] }
+    ExpenseMemberBalance:
+      type: object
+      required: [id, name, paidMinor, shareMinor, balanceMinor, isCurrentMember]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        paidMinor: { type: integer }
+        shareMinor: { type: integer }
+        balanceMinor: { type: integer }
+        isCurrentMember: { type: boolean }
+    ExpenseRepayment:
+      type: object
+      required: [fromId, toId, amountMinor]
+      properties:
+        fromId: { type: string }
+        toId: { type: string }
+        amountMinor: { type: integer }
+    ExpenseLedger:
+      type: object
+      required: [currency, currencyLocked, expenses, settlements, members, totalMinor, repayments]
+      properties:
+        currency: { type: string }
+        currencyLocked: { type: boolean }
+        expenses: { type: array, items: { $ref: "#/components/schemas/ExpenseRecord" } }
+        settlements: { type: array, items: { $ref: "#/components/schemas/SettlementRecord" } }
+        members: { type: array, items: { $ref: "#/components/schemas/ExpenseMemberBalance" } }
+        totalMinor: { type: integer }
+        repayments: { type: array, items: { $ref: "#/components/schemas/ExpenseRepayment" } }
     HealthStatus:
       type: object
       properties:
@@ -112,6 +266,10 @@ components:
     Wish:
       type: object
       properties:
+        id:
+          type: string
+        wishId:
+          type: string
         text:
           type: string
         author:
@@ -147,13 +305,22 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Wish"
-          description: Group wishes sorted by votes
+          description: Legacy group wishes sorted by votes
+        guaranteed:
+          type: array
+          items:
+            $ref: "#/components/schemas/Wish"
+          description: Wishes that must appear in the itinerary
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/Wish"
+          description: Wishes to include when slots allow
       required:
         - destination
         - days
         - vibes
         - budget
-        - wishes
 
     Activity:
       type: object

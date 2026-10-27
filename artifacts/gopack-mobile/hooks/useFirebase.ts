@@ -1,7 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useCallback, useEffect, useState } from "react";
 import { auth, db, equalTo, get, onValue, orderByChild, push, query, ref, set, update } from "@/lib/firebase";
+import { runTransaction } from "firebase/database";
 import { apiFetch } from "@/lib/api-client";
+import { classifyActivity, keySegment, normalizeCity } from "@/lib/activity-classifier";
 
 /* ── Interfaces ───────────────────────────────────────────────────── */
 
@@ -234,6 +236,30 @@ export interface PublicReview {
   reviewedAt: string;
   vibes: string[];
   itineraryDays: PublicItineraryDay[] | null;
+  confirmedAccommodation: AccommodationSuggestion | null;
+}
+
+export interface SavedActivity {
+  id: string;
+  reviewId: string;
+  destination: string;
+  cityKey: string;
+  day: number;
+  time: string;
+  name: string;
+  description: string;
+  category: string;
+  estimatedCost?: number;
+  savedAt: number;
+}
+
+export interface SavedStay {
+  id: string;
+  reviewId: string;
+  destination: string;
+  cityKey: string;
+  accommodation: AccommodationSuggestion;
+  savedAt: number;
 }
 
 export interface SavedDestination {
@@ -254,6 +280,56 @@ export interface PackItem {
 }
 
 export type PackingList = Record<string, PackItem[]>;
+
+/* ── Public review serialization ───────────────────────────────────── */
+
+function serializePublicActivity(a: any) {
+  return {
+    time: a?.time || "",
+    name: a?.name || "",
+    category: classifyActivity({ name: a?.name, description: a?.description, fallback: a?.category || a?.tag }),
+    description: a?.description || "",
+    ...(typeof a?.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
+  };
+}
+
+function serializePublicItineraryDays(trip: any, maxActivities: number) {
+  if (!Array.isArray(trip?.itinerary?.days)) return null;
+  return (trip.itinerary.days as any[]).map((d: any, di: number) => ({
+    day: d.day ?? d.dayNumber ?? di + 1,
+    city: d.city || trip.destination || "",
+    theme: d.theme || d.title || `Day ${d.day ?? d.dayNumber ?? di + 1}`,
+    activities: (d.activities || []).slice(0, maxActivities).map(serializePublicActivity),
+  }));
+}
+
+/** Firebase-safe public copy of a confirmed stay (no undefined values). */
+export function serializePublicAccommodation(a: any): AccommodationSuggestion | null {
+  if (!a || typeof a !== "object" || !a.name) return null;
+  const num = (v: any) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  const strs = (v: any) => (Array.isArray(v) ? v.filter((x: any) => typeof x === "string") : []);
+  const type = ["hotel", "airbnb", "hostel", "other"].includes(a.type) ? a.type : "other";
+  return {
+    id: String(a.id || "stay"),
+    name: String(a.name),
+    type,
+    location: String(a.location || ""),
+    totalCost: num(a.totalCost),
+    costPerPerson: num(a.costPerPerson),
+    nights: num(a.nights),
+    rating: num(a.rating),
+    amenities: strs(a.amenities),
+    rooms: num(a.rooms),
+    beds: num(a.beds),
+    cancellation: String(a.cancellation || ""),
+    whyItFits: String(a.whyItFits || ""),
+    tags: strs(a.tags),
+    distanceNote: String(a.distanceNote || ""),
+    ...(typeof a.link === "string" && a.link ? { link: a.link } : {}),
+    photos: strs(a.photos).filter((u: string) => !u.startsWith("data:")).slice(0, 3),
+    submittedBy: String(a.submittedBy || ""),
+  };
+}
 
 /* ── AsyncStorage helpers ─────────────────────────────────────────── */
 
@@ -384,22 +460,29 @@ export function useTrip(tripId: string | undefined) {
         Array.isArray(data.itinerary?.days) &&
         data.itinerary.days.length > 0
       ) {
-        const itineraryDays = (data.itinerary.days as any[]).map((d: any, di: number) => ({
-          day: d.day ?? d.dayNumber ?? di + 1,
-          city: d.city || data.destination || "",
-          theme: d.theme || d.title || `Day ${d.day ?? di + 1}`,
-          activities: (d.activities || []).slice(0, 5).map((a: any) => ({
-            time: a.time || "",
-            name: a.name || "",
-            category: a.category || a.tag || "",
-            description: a.description || "",
-            ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
-          })),
-        }));
+        const itineraryDays = serializePublicItineraryDays(data, 5);
         const patched = { ...data.review, itineraryDays };
         update(ref(db, `trips/${tripId}`), { review: patched }).catch(() => {});
         if (data.review.isPublic !== false) {
           set(ref(db, `reviews/${tripId}`), patched).catch(() => {});
+        }
+      }
+
+      // Backfill: publish the confirmed stay on the signed-in member's own
+      // public review if it was submitted before stays were included.
+      const myUid = auth.currentUser?.uid;
+      const myReview = myUid ? data?.memberReviews?.[myUid] : undefined;
+      const publicStay = serializePublicAccommodation(data?.confirmedAccommodation);
+      if (myUid && myReview && publicStay && !myReview.confirmedAccommodation) {
+        update(ref(db, `trips/${tripId}/memberReviews/${myUid}`), { confirmedAccommodation: publicStay }).catch(() => {});
+        if (myReview.isPublic !== false) {
+          get(ref(db, `reviews/${tripId}_${myUid}`))
+            .then((snap) => {
+              if (snap.exists() && !snap.val()?.confirmedAccommodation) {
+                return update(ref(db, `reviews/${tripId}_${myUid}`), { confirmedAccommodation: publicStay });
+              }
+            })
+            .catch(() => {});
         }
       }
     });
@@ -542,19 +625,11 @@ export function useProfileTripCollections(
   const stays: ProfileStay[] = [];
   const activities: ProfileActivity[] = [];
   const memories: ProfileMemory[] = [];
-  const normalizedName = displayName?.trim().toLowerCase();
+  void displayName;
 
   for (const trip of trips) {
-    if (trip.confirmedAccommodation) {
-      stays.push({
-        id: `${trip.id}:stay`,
-        tripId: trip.id,
-        destination: trip.destination,
-        startDate: trip.startDate,
-        accommodation: trip.confirmedAccommodation,
-      });
-    }
-
+    // Stays and activities are now explicit saves (userTrips/{uid}/savedStays,
+    // savedActivities). They are no longer derived automatically from trips.
     const memberGuide = uid ? trip.memoryGuides?.[uid] : undefined;
     const legacyReview = trip.review as { reviewedBy?: string; photos?: string[] } | undefined;
     const memberReview = uid
@@ -572,21 +647,6 @@ export function useProfileTripCollections(
       });
     }
 
-    for (const day of trip.itinerary?.days ?? []) {
-      (day.activities ?? []).forEach((activity, index) => {
-        const suggestedByMember = normalizedName &&
-          activity.suggester?.trim().toLowerCase() === normalizedName;
-        if (activity.fromWish || suggestedByMember) {
-          activities.push({
-            id: `${trip.id}:${day.dayNumber}:${index}`,
-            tripId: trip.id,
-            destination: trip.destination,
-            dayNumber: day.dayNumber,
-            activity,
-          });
-        }
-      });
-    }
   }
 
   return {
@@ -643,7 +703,11 @@ function normalizePublicItineraryDays(days: any): PublicItineraryDay[] | null {
       ? day.activities.map((activity: any) => ({
           time: activity?.time ?? "",
           name: activity?.name ?? "",
-          category: activity?.category ?? activity?.tag ?? "",
+          category: classifyActivity({
+            name: activity?.name,
+            description: activity?.description,
+            fallback: activity?.category ?? activity?.tag ?? "",
+          }),
           description: activity?.description ?? "",
           estimatedCost: typeof activity?.estimatedCost === "number" ? activity.estimatedCost : undefined,
         }))
@@ -666,6 +730,7 @@ function normalizePublicReview(id: string, review: any): PublicReview {
     vibes: (review?.vibes ?? (review?.vibeLabel ? review.vibeLabel.split(" & ") : []))
       .map((v: string) => v.charAt(0).toUpperCase() + v.slice(1).toLowerCase()),
     itineraryDays: normalizePublicItineraryDays(review?.itineraryDays),
+    confirmedAccommodation: serializePublicAccommodation(review?.confirmedAccommodation),
   };
 }
 
@@ -784,6 +849,279 @@ export async function removeSavedPublicDestination(uid: string, reviewId: string
   await set(ref(db, `${savedDestinationsPath(uid)}/${reviewId}`), null);
 }
 
+/* ── Explicit saved activities & stays ─────────────────────────────── */
+
+function savedActivitiesPath(uid: string) {
+  return `userTrips/${uid}/savedActivities`;
+}
+function savedStaysPath(uid: string) {
+  return `userTrips/${uid}/savedStays`;
+}
+
+export function savedActivityKey(reviewId: string, day: number, activity: { name: string; time?: string }) {
+  return `${keySegment(reviewId)}_d${keySegment(day)}_${keySegment(activity.name)}`;
+}
+
+export function savedStayKey(reviewId: string, stay: { name: string }) {
+  return `${keySegment(reviewId)}_${keySegment(stay.name)}`;
+}
+
+function normalizeSavedActivity(id: string, v: any): SavedActivity {
+  return {
+    id,
+    reviewId: String(v?.reviewId ?? ""),
+    destination: String(v?.destination ?? ""),
+    cityKey: String(v?.cityKey ?? normalizeCity(v?.destination)),
+    day: Number(v?.day ?? 0),
+    time: String(v?.time ?? ""),
+    name: String(v?.name ?? ""),
+    description: String(v?.description ?? ""),
+    category: classifyActivity({ name: v?.name, description: v?.description, fallback: v?.category }),
+    ...(typeof v?.estimatedCost === "number" ? { estimatedCost: v.estimatedCost } : {}),
+    savedAt: Number(v?.savedAt ?? 0),
+  };
+}
+
+function normalizeSavedStay(id: string, v: any): SavedStay | null {
+  const accommodation = serializePublicAccommodation(v?.accommodation);
+  if (!accommodation) return null;
+  return {
+    id,
+    reviewId: String(v?.reviewId ?? ""),
+    destination: String(v?.destination ?? ""),
+    cityKey: String(v?.cityKey ?? normalizeCity(v?.destination)),
+    accommodation,
+    savedAt: Number(v?.savedAt ?? 0),
+  };
+}
+
+function useLiveUserList<T>(uid: string | undefined, path: (uid: string) => string, map: (id: string, v: any) => T | null) {
+  const [items, setItems] = useState<T[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    // Never show a previous account's items while the next account loads.
+    setItems([]);
+    if (!uid) {
+      setLoading(false);
+      setError(false);
+      return;
+    }
+    setLoading(true);
+    setError(false);
+    return onValue(
+      ref(db, path(uid)),
+      (snap) => {
+        const data = snap.val() as Record<string, any> | null;
+        const list = data
+          ? Object.entries(data).map(([id, v]) => map(id, v)).filter((x): x is T => x !== null)
+          : [];
+        setItems(list);
+        setLoading(false);
+      },
+      () => {
+        setItems([]);
+        setError(true);
+        setLoading(false);
+      },
+    );
+    // path/map are module-level stable functions
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uid]);
+
+  return { items, loading, error };
+}
+
+export function useSavedActivities(uid: string | undefined) {
+  const { items, loading, error } = useLiveUserList<SavedActivity>(uid, savedActivitiesPath, normalizeSavedActivity);
+  return { savedActivities: [...items].sort((a, b) => b.savedAt - a.savedAt), loading, error };
+}
+
+export function useSavedStays(uid: string | undefined) {
+  const { items, loading, error } = useLiveUserList<SavedStay>(uid, savedStaysPath, normalizeSavedStay);
+  return { savedStays: [...items].sort((a, b) => b.savedAt - a.savedAt), loading, error };
+}
+
+export async function saveActivity(
+  uid: string,
+  review: Pick<PublicReview, "id" | "destination">,
+  day: PublicItineraryDay,
+  activity: PublicItineraryActivity,
+): Promise<string> {
+  const key = savedActivityKey(review.id, day.day, activity);
+  const destination = review.destination || day.city || "";
+  await set(ref(db, `${savedActivitiesPath(uid)}/${key}`), {
+    reviewId: review.id,
+    destination,
+    cityKey: normalizeCity(destination),
+    day: day.day,
+    time: activity.time || "",
+    name: activity.name || "",
+    description: activity.description || "",
+    category: classifyActivity({ name: activity.name, description: activity.description, fallback: activity.category }),
+    ...(typeof activity.estimatedCost === "number" ? { estimatedCost: activity.estimatedCost } : {}),
+    savedAt: Date.now(),
+  });
+  return key;
+}
+
+export async function removeSavedActivity(uid: string, key: string): Promise<void> {
+  await set(ref(db, `${savedActivitiesPath(uid)}/${key}`), null);
+}
+
+export async function saveStay(
+  uid: string,
+  review: Pick<PublicReview, "id" | "destination">,
+  accommodation: AccommodationSuggestion,
+): Promise<string> {
+  const clean = serializePublicAccommodation(accommodation);
+  if (!clean) throw new Error("This stay can't be saved.");
+  const key = savedStayKey(review.id, clean);
+  await set(ref(db, `${savedStaysPath(uid)}/${key}`), {
+    reviewId: review.id,
+    destination: review.destination,
+    cityKey: normalizeCity(review.destination),
+    accommodation: clean,
+    savedAt: Date.now(),
+  });
+  return key;
+}
+
+export async function removeSavedStay(uid: string, key: string): Promise<void> {
+  await set(ref(db, `${savedStaysPath(uid)}/${key}`), null);
+}
+
+/** Deterministic id for a saved stay added to a trip, so it can only be added once. */
+export function savedStaySuggestionId(stay: SavedStay) {
+  return `saved-${stay.id}`;
+}
+
+function toSuggestionList(value: any): AccommodationSuggestion[] {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (value && typeof value === "object") {
+    // RTDB may return sparse arrays as index-keyed objects; keep index order.
+    return Object.keys(value)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((k) => value[k])
+      .filter(Boolean);
+  }
+  return [];
+}
+
+export function isSavedStaySuggestion(s: { id?: string } | null | undefined) {
+  return String(s?.id ?? "").startsWith("saved-");
+}
+
+/**
+ * Saved prices come from a past trip. Re-estimate for this trip by scaling the
+ * historical nightly rate to the new nights and splitting by group size.
+ */
+export function estimateSavedStayCost(stay: SavedStay, nights: number, memberCount: number) {
+  const base = stay.accommodation;
+  const pastNights = Math.max(base.nights || 0, 0);
+  const groupSize = Math.max(memberCount, 1);
+  const nightly = base.totalCost > 0 && pastNights > 0 ? base.totalCost / pastNights : 0;
+  const totalCost = nightly > 0 ? Math.round(nightly * Math.max(nights, 1)) : 0;
+  return {
+    nightly: Math.round(nightly),
+    totalCost,
+    costPerPerson: totalCost > 0 ? Math.round(totalCost / groupSize) : 0,
+  };
+}
+
+/**
+ * Appends a saved stay to the trip's accommodation suggestions atomically.
+ * Existing entries keep their indices (votes are keyed by index), so no votes
+ * are lost. Locks are cleared afterwards so locked members can see and vote on
+ * the new option. Idempotent by deterministic suggestion id.
+ */
+export async function addSavedStayToTrip(
+  tripId: string,
+  stay: SavedStay,
+  submittedBy: string,
+  trip: Pick<Trip, "days" | "members">,
+): Promise<"added" | "exists"> {
+  const suggestionId = savedStaySuggestionId(stay);
+  const memberCount = Math.max(Object.keys(trip.members ?? {}).length, 1);
+  const nights = Math.max(trip.days || 1, 1);
+  const estimate = estimateSavedStayCost(stay, nights, memberCount);
+  const base = stay.accommodation;
+  const pastNote = base.totalCost > 0
+    ? `Past-trip estimate: about $${estimate.nightly}/night when stayed on a previous Packyo trip to ${stay.destination}. Check current prices before booking.`
+    : `Saved from a past Packyo trip to ${stay.destination}. No price on record; check current prices.`;
+  const suggestion: AccommodationSuggestion = {
+    ...base,
+    id: suggestionId,
+    nights,
+    totalCost: estimate.totalCost,
+    costPerPerson: estimate.costPerPerson,
+    beds: base.beds || memberCount,
+    whyItFits: pastNote,
+    tags: Array.from(new Set([...(base.tags ?? []).filter((t) => t !== "Member pick"), "Saved stay", "Past-trip estimate"])),
+    submittedBy,
+  };
+
+  let outcome: "added" | "exists" = "exists";
+  const result = await runTransaction(ref(db, `trips/${tripId}/accommodationSuggestions`), (current) => {
+    const list = toSuggestionList(current);
+    if (list.some((s) => s?.id === suggestionId)) {
+      outcome = "exists";
+      return; // abort: no write
+    }
+    outcome = "added";
+    return [...list, suggestion];
+  });
+  if (result.committed && (outcome as "added" | "exists") === "added") {
+    // A new option exists: unlock everyone so they can weigh in. Votes stay.
+    await set(ref(db, `trips/${tripId}/accommodationLockedBy`), null).catch(() => {});
+    return "added";
+  }
+  return "exists";
+}
+
+/**
+ * Stores freshly generated AI suggestions without dropping saved-stay picks that
+ * members added (including ones added while the AI request was in flight).
+ * Saved picks keep their indices; every other slot is replaced and its votes
+ * are cleared, so no vote ends up attached to a different stay.
+ */
+export async function mergeAiAccommodationSuggestions(
+  tripId: string,
+  aiSuggestions: AccommodationSuggestion[],
+): Promise<void> {
+  let replacedIndices: number[] = [];
+  await runTransaction(ref(db, `trips/${tripId}/accommodationSuggestions`), (current) => {
+    const list = toSuggestionList(current);
+    const queue = [...aiSuggestions];
+    const next: AccommodationSuggestion[] = [];
+    replacedIndices = [];
+    const lastSavedIdx = list.reduce((acc, s, i) => (isSavedStaySuggestion(s) ? i : acc), -1);
+    list.forEach((s, idx) => {
+      if (isSavedStaySuggestion(s)) {
+        next.push(s);
+      } else if (queue.length > 0) {
+        next.push(queue.shift()!);
+        replacedIndices.push(idx);
+      } else if (idx < lastSavedIdx) {
+        // Rare: fewer AI results than old slots. Keep the old option (and its
+        // votes) rather than shifting a later saved stay to another index.
+        next.push(s);
+      } else {
+        replacedIndices.push(idx);
+      }
+    });
+    return [...next, ...queue];
+  });
+  const patch: Record<string, unknown> = {
+    accommodationStatus: "voting",
+    accommodationPreferences: null,
+    accommodationLockedBy: null,
+  };
+  for (const idx of new Set(replacedIndices)) patch[`accommodationVotes/${idx}`] = null;
+  await update(ref(db, `trips/${tripId}`), patch);
+}
+
 /* ── submitTripReview ─────────────────────────────────────────────── */
 
 export async function submitTripReview(
@@ -831,20 +1169,8 @@ export async function submitTripReview(
   );
 
   const memberEntries = Object.values(trip.members || {}) as any[];
-  const itineraryDays = trip.itinerary?.days
-    ? (trip.itinerary.days as any[]).map((d: any, di: number) => ({
-        day: d.day ?? d.dayNumber ?? di + 1,
-        city: d.city || trip.destination || "",
-        theme: d.theme || d.title || `Day ${d.day ?? d.dayNumber ?? di + 1}`,
-        activities: (d.activities || []).slice(0, 4).map((a: any) => ({
-          time: a.time || "",
-          name: a.name || "",
-          category: a.category || a.tag || "",
-          description: a.description || "",
-          ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
-        })),
-      }))
-    : null;
+  const itineraryDays = serializePublicItineraryDays(trip, 4);
+  const publicStay = serializePublicAccommodation(trip.confirmedAccommodation);
 
   const review = {
     rating: reviewData.rating,
@@ -860,6 +1186,7 @@ export async function submitTripReview(
     reviewedAt: new Date().toISOString(),
     reviewedBy: uid,
     ...(itineraryDays ? { itineraryDays } : {}),
+    ...(publicStay ? { confirmedAccommodation: publicStay } : {}),
   };
 
   await set(ref(db, `trips/${tripId}/memberReviews/${uid}`), review);
