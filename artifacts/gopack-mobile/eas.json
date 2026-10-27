@@ -16,6 +16,7 @@
       }
     },
     "production": {
+      "pnpm": "11.9.0",
       "autoIncrement": true,
       "env": {
         "EAS_BUILD_SKIP_LOCKFILE_CHECK": "1",

@@ -19,9 +19,5 @@
     "@replit/revenuecat-sdk": "^4.2.0",
     "stripe": "^22.2.3"
   },
-  "pnpm": {
-    "overrides": {
-      "@babel/core": "^7.26.0"
-    }
-  }
+  "packageManager": "pnpm@11.9.0"
 }
