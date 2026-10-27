@@ -26,7 +26,8 @@
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "107013969008-asl7e652vccbm8dtum8v4ln4acufj2s0.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "107013969008-529820uttubpthf47mkps5sc0g1k8p29.apps.googleusercontent.com"
       },
-      "environment": "production"
+      "environment": "production",
+      "node": "22.14.0"
     }
   }
 }
