@@ -1663,7 +1663,7 @@ export default function ItineraryScreen() {
           style={styles.headerTabs}
           contentContainerStyle={styles.headerTabsContent}
         >
-          {(["overview", "itinerary", "expenses", "info", "map", "packing"] as const).map((t) => {
+          {(["overview", "itinerary", "info", "map", "packing", "expenses"] as const).map((t) => {
             const isActive = activeTab === t;
             return (
               <Pressable
@@ -1718,15 +1718,6 @@ export default function ItineraryScreen() {
 
       {activeTab === "packing" && (
         <View style={{ flex: 1 }}>
-          <Pressable
-            onPress={() => setActiveTab("expenses")}
-            accessibilityRole="button"
-            style={{ margin: 16, padding: 14, borderRadius: 14, backgroundColor: colors.primary, flexDirection: "row", alignItems: "center", gap: 10 }}
-          >
-            <Feather name="credit-card" size={18} color="#fff" />
-            <Text style={{ color: "#fff", fontFamily: "DmSans_600SemiBold", flex: 1 }}>Shared expenses</Text>
-            <Feather name="arrow-right" size={18} color="#fff" />
-          </Pressable>
           <PackingListContent id={id} embedded />
         </View>
       )}
@@ -1736,7 +1727,7 @@ export default function ItineraryScreen() {
       )}
 
       {activeTab === "expenses" && id && (
-        <TripExpenses trip={trip} tripId={id} onOpenPacking={() => setActiveTab("packing")} />
+        <TripExpenses trip={trip} tripId={id} />
       )}
 
       {/* ── INFO TAB ── */}

@@ -47,7 +47,7 @@ interface Props {
   trip: Trip;
   wishes: Wish[];
   currentUid?: string;
-  onOpen: (tab: "itinerary" | "expenses" | "packing") => void;
+  onOpen: (tab: "itinerary") => void;
 }
 
 export function TripOverview({ trip, wishes, currentUid, onOpen }: Props) {
@@ -199,16 +199,6 @@ export function TripOverview({ trip, wishes, currentUid, onOpen }: Props) {
         ) : null}
       </Section>
 
-      <View style={s.quickRow}>
-        <Pressable onPress={() => onOpen("expenses")} style={({ pressed }) => [s.quick, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}>
-          <Feather name="credit-card" size={18} color={colors.primary} />
-          <Text style={[s.quickText, { color: colors.foreground }]}>Expenses</Text>
-        </Pressable>
-        <Pressable onPress={() => onOpen("packing")} style={({ pressed }) => [s.quick, { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.8 : 1 }]}>
-          <Feather name="briefcase" size={18} color={colors.primary} />
-          <Text style={[s.quickText, { color: colors.foreground }]}>Packing list</Text>
-        </Pressable>
-      </View>
     </ScrollView>
   );
 
@@ -261,7 +251,4 @@ const s = StyleSheet.create({
   chipText: { fontFamily: "DmSans_500Medium", fontSize: 13, textTransform: "capitalize" },
   note: { fontFamily: "DmSans_400Regular", fontSize: 13, lineHeight: 19 },
   iconBox: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  quickRow: { flexDirection: "row", gap: 12 },
-  quick: { flex: 1, borderRadius: 16, borderWidth: 1, padding: 16, flexDirection: "row", alignItems: "center", gap: 10 },
-  quickText: { fontFamily: "DmSans_600SemiBold", fontSize: 15 },
 });

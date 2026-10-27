@@ -60,7 +60,7 @@ function confirmAction(title: string, message: string, onYes: () => void) {
   ]);
 }
 
-export function TripExpenses({ trip, tripId, onOpenPacking }: { trip: Trip; tripId: string; onOpenPacking: () => void }) {
+export function TripExpenses({ trip, tripId }: { trip: Trip; tripId: string }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const exp = useTripExpenses(tripId, true);
@@ -213,11 +213,6 @@ export function TripExpenses({ trip, tripId, onOpenPacking }: { trip: Trip; trip
           </View>
         ) : null}
 
-        <Pressable onPress={onOpenPacking} style={[st.packing, { borderColor: colors.border, backgroundColor: colors.card }]}>
-          <Feather name="briefcase" size={18} color={colors.primary} />
-          <Text style={[st.rowName, { color: colors.foreground }]}>Open packing list</Text>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-        </Pressable>
         <Text style={[st.muted, { color: colors.mutedForeground, textAlign: "center" }]}>
           Packyo keeps a shared record. No money moves through the app.
         </Text>
@@ -718,7 +713,6 @@ const st = StyleSheet.create({
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
   chipText: { fontFamily: "DmSans_500Medium", fontSize: 13 },
   empty: { borderWidth: 1, borderStyle: "dashed", borderRadius: 16, padding: 22, alignItems: "center", gap: 8, marginTop: 6 },
-  packing: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderRadius: 14, padding: 14 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", gap: 12, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   outlineBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16 },
   solidBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 15, paddingHorizontal: 16 },
