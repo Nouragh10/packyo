@@ -71,6 +71,70 @@ paths:
               schema:
                 $ref: "#/components/schemas/ItineraryGenerationError"
 
+  /trips/{tripId}/activity-prices:
+    post:
+      operationId: verifyTripActivityPrices
+      tags: [ai]
+      summary: Verify source-listed activity prices for a current trip member
+      security:
+        - firebaseBearer: []
+      parameters:
+        - in: path
+          name: tripId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityPriceCheckInput"
+      responses:
+        "200":
+          description: Checked a batch of activity prices; continue with nextCursor if present
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPriceCheckResult"
+        "401":
+          description: Sign-in required
+        "403":
+          description: Current trip membership required
+        "503":
+          description: Pricing lookup temporarily unavailable
+  /reviews/{reviewId}/activity-prices:
+    post:
+      operationId: verifyReviewActivityPrices
+      tags: [ai]
+      summary: Verify public Discover itinerary prices without accessing private trips
+      security:
+        - firebaseBearer: []
+      parameters:
+        - in: path
+          name: reviewId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityPriceCheckInput"
+      responses:
+        "200":
+          description: Checked a public itinerary batch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityPriceCheckResult"
+        "401":
+          description: Sign-in required
+        "404":
+          description: Public review not found
+        "503":
+          description: Pricing lookup temporarily unavailable
   /packing:
     post:
       operationId: generatePackingList
@@ -175,7 +239,68 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ExpenseLedger" }
 components:
+  securitySchemes:
+    firebaseBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Firebase ID token
   schemas:
+    ActivityPriceCheckInput:
+      type: object
+      properties:
+        force:
+          type: boolean
+        cursor:
+          type: integer
+          minimum: 0
+          maximum: 2000
+    ActivityPriceCheckResult:
+      type: object
+      required: [checked, verified, unavailable, remaining, nextCursor]
+      properties:
+        checked:
+          type: integer
+        verified:
+          type: integer
+        unavailable:
+          type: integer
+        remaining:
+          type: integer
+        nextCursor:
+          type: ["integer", "null"]
+        busy:
+          type: boolean
+    ActivityPricing:
+      type: object
+      required: [status, amount, currency, checkedAt]
+      properties:
+        status:
+          type: string
+          enum: [verified, unavailable, user_entered]
+        amount:
+          type: ["number", "null"]
+        currency:
+          type: ["string", "null"]
+        priceType:
+          type: string
+          enum: [fixed, from, range, free]
+        maxAmount:
+          type: ["number", "null"]
+        scope:
+          type: string
+          enum: [admission, tour, menu_item, transport, other]
+        sourceUrl:
+          type: ["string", "null"]
+        sourceTitle:
+          type: ["string", "null"]
+        evidence:
+          type: ["string", "null"]
+        checkedAt:
+          type: ["string", "null"]
+        activityName:
+          type: string
+        note:
+          type: string
     ExpenseDeletionInput:
       type: object
       required: [revision]
@@ -361,7 +486,9 @@ components:
         suggester:
           type: string
         estimatedCost:
-          type: number
+          type: ["number", "null"]
+        pricing:
+          $ref: "#/components/schemas/ActivityPricing"
         labels:
           type: array
           items:

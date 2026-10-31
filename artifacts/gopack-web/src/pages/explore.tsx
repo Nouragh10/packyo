@@ -5,6 +5,9 @@ import {
   MapPin, Star, Users, ArrowLeft, Sparkles, Loader2,
   MessageSquare, CalendarDays, Camera, Search, Sun,
 } from "lucide-react";
+import { ActivityPrice } from "@/components/ActivityPrice";
+import { useAuth } from "@/hooks/useAuth";
+import { useActivityPrices } from "@/hooks/useActivityPrices";
 import { usePublicReviews, useGlobalStats } from "@/hooks/useFirebase";
 
 const MONTHLY_PICKS = [
@@ -92,12 +95,22 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   );
 }
 
-function ItineraryPreview({ days, tripDays }: { days: any[]; tripDays: number }) {
+function ItineraryPreview({ days, tripDays, reviewId }: { days: any[]; tripDays: number; reviewId: string }) {
+  const { user } = useAuth();
+  // Manual only: avoids paid lookups for every card on the Discover feed.
+  const prices = useActivityPrices({ kind: "review", id: reviewId, user, autoKey: null });
   return (
     <div className="mt-4 rounded-xl overflow-hidden border border-border/70 text-[11px]">
       <div className="bg-foreground text-background px-3 py-2 flex items-center gap-1.5 font-semibold">
         <CalendarDays size={11} />
         <span>{tripDays}-day itinerary</span>
+        {user && (
+          <button onClick={prices.verify} disabled={prices.running}
+            className="ml-auto text-[10px] font-medium underline-offset-2 hover:underline disabled:opacity-60"
+            title={prices.error || "Check current prices from sources"} data-testid={`button-verify-review-prices-${reviewId}`}>
+            {prices.running ? "Checking prices…" : prices.error ? "Price check failed · retry" : "Verify prices"}
+          </button>
+        )}
       </div>
       <div className="divide-y divide-border/40 bg-background max-h-40 overflow-y-auto">
         {days.map((d: any, di: number) => (
@@ -114,6 +127,9 @@ function ItineraryPreview({ days, tripDays }: { days: any[]; tripDays: number })
                   >
                     {a.time && <span className="text-foreground/50 mr-1">{a.time}</span>}
                     {a.name}
+                    <span className="ml-1.5 inline-block align-middle scale-90 origin-left">
+                      <ActivityPrice activity={a} compact testId={`text-review-price-${di}-${ai}`}/>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -440,7 +456,7 @@ export default function Explore() {
 
                     {/* Itinerary preview */}
                     {review.itineraryDays?.length > 0 ? (
-                      <ItineraryPreview days={review.itineraryDays} tripDays={review.days} />
+                      <ItineraryPreview days={review.itineraryDays} tripDays={review.days} reviewId={review.id} />
                     ) : (
                       <div className="mt-4 rounded-xl border border-border/70 overflow-hidden text-[11px]">
                         <div className="bg-foreground text-background px-3 py-2 flex items-center gap-1.5 font-semibold">

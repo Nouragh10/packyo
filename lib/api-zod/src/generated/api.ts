@@ -63,12 +63,80 @@ export const GenerateItineraryResponse = zod.object({
   "tag": zod.string(),
   "fromWish": zod.boolean(),
   "suggester": zod.string(),
-  "estimatedCost": zod.number(),
+  "estimatedCost": zod.number().nullable(),
+  "pricing": zod.object({
+  "status": zod.enum(['verified', 'unavailable', 'user_entered']),
+  "amount": zod.number().nullable(),
+  "currency": zod.string().nullable(),
+  "priceType": zod.enum(['fixed', 'from', 'range', 'free']).optional(),
+  "maxAmount": zod.number().nullish(),
+  "scope": zod.enum(['admission', 'tour', 'menu_item', 'transport', 'other']).optional(),
+  "sourceUrl": zod.string().nullish(),
+  "sourceTitle": zod.string().nullish(),
+  "evidence": zod.string().nullish(),
+  "checkedAt": zod.string().nullable(),
+  "activityName": zod.string().optional(),
+  "note": zod.string().optional()
+}).optional(),
   "labels": zod.array(zod.string()),
   "nearPrevious": zod.boolean(),
   "actId": zod.string().nullish()
 }))
 }))
+})
+
+
+/**
+ * @summary Verify source-listed activity prices for a current trip member
+ */
+export const VerifyTripActivityPricesParams = zod.object({
+  "tripId": zod.coerce.string()
+})
+
+export const verifyTripActivityPricesBodyCursorMin = 0;
+export const verifyTripActivityPricesBodyCursorMax = 2000;
+
+
+
+export const VerifyTripActivityPricesBody = zod.object({
+  "force": zod.boolean().optional(),
+  "cursor": zod.number().min(verifyTripActivityPricesBodyCursorMin).max(verifyTripActivityPricesBodyCursorMax).optional()
+})
+
+export const VerifyTripActivityPricesResponse = zod.object({
+  "checked": zod.number(),
+  "verified": zod.number(),
+  "unavailable": zod.number(),
+  "remaining": zod.number(),
+  "nextCursor": zod.number().nullable(),
+  "busy": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Verify public Discover itinerary prices without accessing private trips
+ */
+export const VerifyReviewActivityPricesParams = zod.object({
+  "reviewId": zod.coerce.string()
+})
+
+export const verifyReviewActivityPricesBodyCursorMin = 0;
+export const verifyReviewActivityPricesBodyCursorMax = 2000;
+
+
+
+export const VerifyReviewActivityPricesBody = zod.object({
+  "force": zod.boolean().optional(),
+  "cursor": zod.number().min(verifyReviewActivityPricesBodyCursorMin).max(verifyReviewActivityPricesBodyCursorMax).optional()
+})
+
+export const VerifyReviewActivityPricesResponse = zod.object({
+  "checked": zod.number(),
+  "verified": zod.number(),
+  "unavailable": zod.number(),
+  "remaining": zod.number(),
+  "nextCursor": zod.number().nullable(),
+  "busy": zod.boolean().optional()
 })
 
 

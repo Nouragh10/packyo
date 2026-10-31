@@ -1,3 +1,4 @@
+import { activityPricePresentation } from "@workspace/activity-pricing";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useColors } from "@/hooks/useColors";
 import { WikiImage } from "@/components/WikiImage";
+import { ActivityPrice } from "@/components/ActivityPrice";
 
 const TAG_COLORS: Record<string, string> = {
   food: "#F15A3A",
@@ -43,7 +45,7 @@ export default function ActivityDetailScreen() {
     description: string;
     time: string;
     tag: string;
-    estimatedCost: string;
+    pricing?: string;
     photoQuery: string;
     lat: string;
     lng: string;
@@ -70,7 +72,8 @@ export default function ActivityDetailScreen() {
   const fallbackIndex = Number.isFinite(Number(params.fallbackIndex))
     ? Number(params.fallbackIndex)
     : 0;
-  const cost = parseFloat(params.estimatedCost ?? "0");
+  const pricingParam = (() => { try { return JSON.parse(params.pricing ?? "null"); } catch { return null; } })();
+  const price = activityPricePresentation({ name, pricing: pricingParam });
   const labels: string[] = JSON.parse(params.labels ?? "[]");
   const isFromWish = fromWish === "true";
   const latNum = parseFloat(params.lat ?? "");
@@ -167,7 +170,7 @@ export default function ActivityDetailScreen() {
             <View style={[styles.chip, { backgroundColor: colors.muted, borderColor: colors.border }]}>
               <Feather name="dollar-sign" size={12} color={colors.foreground} />
               <Text style={[styles.chipText, { color: colors.foreground }]}>
-                {cost === 0 ? "No entry fee" : `~$${cost} / person`}
+                {price.label}
               </Text>
             </View>
             {matchedVibe ? (
@@ -177,6 +180,11 @@ export default function ActivityDetailScreen() {
               </View>
             ) : null}
           </View>
+        </View>
+
+        {/* Price source */}
+        <View style={[styles.mapCard, { backgroundColor: colors.card, borderColor: colors.border }]} testID="activity-detail-price">
+          <ActivityPrice activity={{ name, pricing: pricingParam }} />
         </View>
 
         {/* Map card */}
@@ -232,9 +240,9 @@ export default function ActivityDetailScreen() {
             <Text style={[styles.tipTitle, { color: colors.foreground }]}>Packyo tip</Text>
           </View>
           <Text style={[styles.tipText, { color: colors.mutedForeground }]}>
-            {cost === 0
-              ? `${name} has no entry fee — no booking needed. Just show up and enjoy!`
-              : `Budget around $${cost} per person. Book in advance when possible to avoid waiting.`}
+            {price.verified
+              ? `${price.note} Source: ${price.sourceTitle}${price.checkedAt ? `, checked ${new Date(price.checkedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}.`
+              : `${price.label}. ${price.note} Check the venue before you go.`}
           </Text>
         </View>
       </ScrollView>

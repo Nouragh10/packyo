@@ -5,6 +5,7 @@
  * GoPack AI Group Travel Planner API
  * OpenAPI spec version: 0.1.0
  */
+import type { ActivityPricing } from './activityPricing';
 
 export interface Activity {
   time: string;
@@ -13,7 +14,9 @@ export interface Activity {
   tag: string;
   fromWish: boolean;
   suggester: string;
-  estimatedCost: number;
+  /** @nullable */
+  estimatedCost: number | null;
+  pricing?: ActivityPricing;
   labels: string[];
   nearPrevious: boolean;
   /** @nullable */

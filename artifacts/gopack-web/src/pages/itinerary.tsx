@@ -2,15 +2,18 @@ import { useEffect, useState, useRef } from "react";
 import { useRoute, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Clock, DollarSign, Sparkles, Star, Loader2,
+  ArrowLeft, Clock, Sparkles, ShieldCheck, AlertCircle, Star, Loader2,
   FileDown, CalendarPlus, Edit2, Plus, Check, X, MapPin, Users, Eye,
   RotateCcw, Trash2, Lock, Zap
 } from "lucide-react";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, set, runTransaction } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { incrementAiUsage } from "@/hooks/useFirebase";
 import { useAuth } from "@/hooks/useAuth";
 import { UpgradeModal } from "@/components/UpgradeModal";
+import { ActivityPrice, ActivityPricePrint } from "@/components/ActivityPrice";
+import { useActivityPrices } from "@/hooks/useActivityPrices";
+import { summarizeActivityPrices, validPriceCurrency, activityPricePresentation } from "@workspace/activity-pricing";
 
 /* ─── constants ─────────────────────────────────────────────── */
 const TAG_COLORS: Record<string, string> = {
@@ -181,9 +184,67 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   }, 1000);
 }
 
+/* ─── manual price helpers ───────────────────────────────────── */
+const COMMON_CURRENCIES = ["USD","EUR","GBP","JPY","CAD","AUD","MXN","CHF","CNY","INR","THB","SGD","NZD","KRW","BRL","ZAR","SEK","NOK","DKK","AED","TRY","IDR","VND","PHP","HKD","CZK","PLN","HUF","ISK","MAD","EGP","PEN","COP","ARS","CLP"];
+
+function initialPriceFields(activity: any, tripCurrency: string | null) {
+  const p = activity?.pricing;
+  const amount = p && typeof p.amount === "number" && (p.status === "user_entered" || p.status === "verified") ? String(p.amount) : "";
+  const currency = validPriceCurrency(p?.currency) ? p.currency : tripCurrency || "";
+  return { priceAmount: amount, priceCurrency: currency };
+}
+
+/** Apply name/price edits: any change to name or price drops the old source. */
+function applyManualPrice(original: any, form: any) {
+  const { priceAmount, priceCurrency, ...rest } = form;
+  const next: any = { ...rest, estimatedCost: null };
+  const nameChanged = (original?.name ?? "") !== (rest.name ?? "");
+  const init = initialPriceFields(original, null);
+  const raw = String(priceAmount ?? "").trim();
+  const priceChanged = raw !== init.priceAmount || (raw !== "" && priceCurrency !== original?.pricing?.currency);
+  if (!nameChanged && !priceChanged && original?.pricing) { next.pricing = original.pricing; return next; }
+  const amount = raw === "" ? NaN : Number(raw);
+  if (Number.isFinite(amount) && amount >= 0 && validPriceCurrency(priceCurrency)) {
+    next.pricing = { status: "user_entered", amount, currency: priceCurrency, sourceUrl: null, sourceTitle: null, evidence: null, checkedAt: new Date().toISOString(), activityName: rest.name || "", note: "Entered by a pack member; not independently verified." };
+  } else {
+    next.pricing = null; // unknown — background check may find a source
+  }
+  return next;
+}
+
+function PriceFields({ form, set_, tripCurrency }: { form: any; set_: (k: string, v: any) => void; tripCurrency: string | null }) {
+  const raw = String(form.priceAmount ?? "").trim();
+  const bad = raw !== "" && (!Number.isFinite(Number(raw)) || Number(raw) < 0 || !validPriceCurrency(form.priceCurrency));
+  return (
+    <div>
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Price per person (optional)</label>
+      <div className="flex gap-2">
+        <input type="number" min={0} step="any" inputMode="decimal" value={form.priceAmount} onChange={e=>set_("priceAmount",e.target.value)} placeholder="Unknown"
+          className="w-full min-w-0 border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" data-testid="input-price-amount"/>
+        {tripCurrency ? (
+          <span className="flex items-center px-3 text-xs font-semibold border border-border rounded-lg bg-muted/50 text-muted-foreground" data-testid="text-price-currency">{tripCurrency}</span>
+        ) : (
+          <select value={form.priceCurrency} onChange={e=>set_("priceCurrency",e.target.value)} className="border border-border rounded-lg px-2 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" data-testid="select-price-currency">
+            <option value="">Currency</option>
+            {COMMON_CURRENCIES.filter(c=>validPriceCurrency(c)).map(c=><option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
+      </div>
+      <p className={`text-[11px] mt-1 ${bad ? "text-destructive" : "text-muted-foreground"}`}>
+        {bad ? "Enter a non-negative amount and choose a currency, or leave blank." : "Saved as user-entered, not verified. Leave blank if unknown."}
+      </p>
+    </div>
+  );
+}
+
+function priceFieldsInvalid(form: any) {
+  const raw = String(form.priceAmount ?? "").trim();
+  return raw !== "" && (!Number.isFinite(Number(raw)) || Number(raw) < 0 || !validPriceCurrency(form.priceCurrency));
+}
+
 /* ─── ActivityEditor ─────────────────────────────────────────── */
-function ActivityEditor({ activity, onSave, onCancel }: { activity: any; onSave: (u: any) => void; onCancel: () => void }) {
-  const [form, setForm] = useState({ ...activity });
+function ActivityEditor({ activity, onSave, onCancel, tripCurrency }: { activity: any; onSave: (u: any) => void; onCancel: () => void; tripCurrency: string | null }) {
+  const [form, setForm] = useState({ ...activity, ...initialPriceFields(activity, tripCurrency) });
   const set_ = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
   return (
     <div className="border-2 border-primary/30 rounded-2xl p-5 bg-primary/5 flex flex-col gap-3">
@@ -196,24 +257,23 @@ function ActivityEditor({ activity, onSave, onCancel }: { activity: any; onSave:
       <div><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Description</label>
         <textarea value={form.description||""} onChange={e=>set_("description",e.target.value)} rows={3} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"/></div>
       <div className="grid grid-cols-2 gap-3">
-        <div><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Est. cost ($)</label>
-          <input type="number" value={form.estimatedCost||0} onChange={e=>set_("estimatedCost",Number(e.target.value))} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"/></div>
+        <PriceFields form={form} set_={set_} tripCurrency={tripCurrency}/>
         <div><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Category</label>
           <select value={form.tag||"travel"} onChange={e=>set_("tag",e.target.value)} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
             {TAG_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
       </div>
       <div className="flex gap-2 justify-end pt-1">
         <button onClick={onCancel} className="flex items-center gap-1.5 px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted/50 transition-colors"><X size={14}/> Cancel</button>
-        <button onClick={()=>onSave(form)} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"><Check size={14}/> Save</button>
+        <button onClick={()=>onSave(applyManualPrice(activity, form))} disabled={priceFieldsInvalid(form)} className="disabled:opacity-40 flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"><Check size={14}/> Save</button>
       </div>
     </div>
   );
 }
 
 /* ─── AddActivityForm ────────────────────────────────────────── */
-function AddActivityForm({ dayIndex, onAdd, onCancel, userName }: { dayIndex: number; onAdd: (di: number, a: any) => void; onCancel: () => void; userName: string }) {
-  const [form, setForm] = useState({ name:"", time:"", description:"", estimatedCost:0, tag:"travel", labels:[], fromWish:false, suggester: userName || "Member" });
-  const set_ = (k: string, v: any) => setForm(f=>({ ...f, [k]: v }));
+function AddActivityForm({ dayIndex, onAdd, onCancel, userName, tripCurrency }: { dayIndex: number; onAdd: (di: number, a: any) => void; onCancel: () => void; userName: string; tripCurrency: string | null }) {
+  const [form, setForm] = useState<any>({ name:"", time:"", description:"", tag:"travel", labels:[], fromWish:false, suggester: userName || "Member", priceAmount:"", priceCurrency: tripCurrency || "" });
+  const set_ = (k: string, v: any) => setForm((f: any)=>({ ...f, [k]: v }));
   return (
     <div className="border-2 border-dashed border-primary/40 rounded-2xl p-5 bg-primary/5 flex flex-col gap-3">
       <p className="text-sm font-medium text-primary">New activity</p>
@@ -226,15 +286,14 @@ function AddActivityForm({ dayIndex, onAdd, onCancel, userName }: { dayIndex: nu
       <div><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Description</label>
         <textarea value={form.description} onChange={e=>set_("description",e.target.value)} rows={2} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none" placeholder="What to expect…"/></div>
       <div className="grid grid-cols-2 gap-3">
-        <div><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Est. cost ($)</label>
-          <input type="number" value={form.estimatedCost} onChange={e=>set_("estimatedCost",Number(e.target.value))} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"/></div>
+        <PriceFields form={form} set_={set_} tripCurrency={tripCurrency}/>
         <div><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Category</label>
           <select value={form.tag} onChange={e=>set_("tag",e.target.value)} className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30">
             {TAG_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
       </div>
       <div className="flex gap-2 justify-end pt-1">
         <button onClick={onCancel} className="flex items-center gap-1.5 px-4 py-2 text-sm border border-border rounded-lg hover:bg-muted/50 transition-colors"><X size={14}/> Cancel</button>
-        <button onClick={()=>{ if(form.name.trim()) onAdd(dayIndex,form); }} disabled={!form.name.trim()} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40"><Plus size={14}/> Add activity</button>
+        <button onClick={()=>{ if(form.name.trim() && !priceFieldsInvalid(form)) onAdd(dayIndex,applyManualPrice({}, form)); }} disabled={!form.name.trim() || priceFieldsInvalid(form)} className="flex items-center gap-1.5 px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-40"><Plus size={14}/> Add activity</button>
       </div>
     </div>
   );
@@ -247,10 +306,7 @@ function PackyoPrintReport({ itinerary, trip }: { itinerary: any; trip: any }) {
     new Set(days.flatMap((day: any) => (day.activities || []).map((activity: any) => activity.tag).filter(Boolean)))
   ) as string[];
   const vibes = Array.isArray(trip?.vibes) && trip.vibes.length ? trip.vibes : activityTags;
-  const totalCost = days.flatMap((day: any) => day.activities || []).reduce(
-    (sum: number, activity: any) => sum + (Number(activity.estimatedCost) || 0),
-    0
-  );
+  const priceSummary = summarizeActivityPrices(days.flatMap((day: any) => day.activities || []));
   const activityCount = days.reduce((sum: number, day: any) => sum + (day.activities?.length || 0), 0);
   const destination = trip?.destination || "Your destination";
   const generatedOn = new Intl.DateTimeFormat("en-US", {
@@ -332,9 +388,7 @@ function PackyoPrintReport({ itinerary, trip }: { itinerary: any; trip: any }) {
                       <h3>{activity.name || "Activity"}</h3>
                       <p className="packyo-activity-source">{source}</p>
                       {activity.description && <p className="packyo-activity-description">{activity.description}</p>}
-                      {Number(activity.estimatedCost) > 0 && (
-                        <p className="packyo-activity-cost">~${Number(activity.estimatedCost).toLocaleString()} per person</p>
-                      )}
+                      <div className="packyo-activity-cost"><ActivityPricePrint activity={activity}/></div>
                     </article>
                   );
                 })}
@@ -344,9 +398,13 @@ function PackyoPrintReport({ itinerary, trip }: { itinerary: any; trip: any }) {
         </section>
 
         <footer className="packyo-report-total">
-          <p>ESTIMATED TOTAL · ALL {days.length} {days.length === 1 ? "DAY" : "DAYS"}</p>
-          <strong>~${totalCost.toLocaleString()}</strong>
-          <span>per person · {activityCount} {activityCount === 1 ? "activity" : "activities"}</span>
+          <p>VERIFIED ACTIVITY PRICES · ALL {days.length} {days.length === 1 ? "DAY" : "DAYS"}</p>
+          <strong>{priceSummary.totals.length ? priceSummary.totals.map(t => t.label).join(" + ") : "No verified prices yet"}</strong>
+          <span>
+            per person · {priceSummary.verifiedCount} of {activityCount} {activityCount === 1 ? "activity" : "activities"} source-verified
+            {priceSummary.hasFromPrices ? " · includes starting prices" : ""}
+            {priceSummary.unknownCount > 0 ? ` · ${priceSummary.unknownCount} unpriced, not included` : ""}
+          </span>
           <div className="packyo-report-footer">
             <b>Packyo</b>
             <span>Plan trips together ✦</span>
@@ -356,6 +414,50 @@ function PackyoPrintReport({ itinerary, trip }: { itinerary: any; trip: any }) {
       </section>
     </section>
   );
+}
+
+/** Auto-check key from server-persisted venue identities only (never pricing, never drafts). */
+function canShowItineraryKey(trip: any, itinerary: any): string | null {
+  if (!trip?.destination || !Array.isArray(itinerary?.days) || itinerary.days.length === 0) return null;
+  const venues = itinerary.days.map((d: any, di: number) =>
+    (d?.activities || []).map((a: any, ai: number) => `${di}.${ai}:${a?.id ?? ""}:${String(a?.name ?? "").trim().toLowerCase()}`).join("|")
+  ).join("/");
+  let h = 5381;
+  for (let i = 0; i < venues.length; i++) h = ((h * 33) ^ venues.charCodeAt(i)) >>> 0;
+  return `${itinerary.generatedAt || itinerary.createdAt || ""}:${h.toString(36)}`;
+}
+
+/** Find counterpart: stable id anywhere, else same day+index with exact same name (legacy). */
+function findCounterpart(itin: any, act: any, di: number, ai: number): any {
+  if (!itin?.days) return undefined;
+  if (act?.id != null) {
+    for (const d of itin.days) for (const a of d?.activities || []) if (a?.id === act.id) return a;
+    return undefined;
+  }
+  const c = itin.days[di]?.activities?.[ai];
+  return c && c.id == null && c.name === act?.name ? c : undefined;
+}
+
+/**
+ * Keep the user's unsaved draft (content, additions, removals) but adopt new
+ * server pricing for activities whose venue and price the user has not touched.
+ * Locally changed venues/prices keep their local (already invalidated) pricing.
+ */
+function mergeServerPricing(local: any, prevBaseline: any, server: any): any {
+  const next = JSON.parse(JSON.stringify(local));
+  (next.days || []).forEach((day: any, di: number) => {
+    (day?.activities || []).forEach((act: any, ai: number) => {
+      const before = findCounterpart(prevBaseline, act, di, ai);
+      const after = findCounterpart(server, act, di, ai);
+      if (!before || !after) return;
+      const untouched = before.name === act.name && after.name === act.name &&
+        JSON.stringify(before.pricing ?? null) === JSON.stringify(act.pricing ?? null);
+      if (!untouched) return;
+      act.pricing = after.pricing ?? null;
+      act.estimatedCost = after.estimatedCost ?? null;
+    });
+  });
+  return next;
 }
 
 /* ─── main page ──────────────────────────────────────────────── */
@@ -370,6 +472,7 @@ export default function Itinerary() {
   const [permissionError, setPermissionError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [addingToDayIndex, setAddingToDayIndex] = useState<number | null>(null);
   const [printPreview, setPrintPreview] = useState(false);
@@ -379,8 +482,14 @@ export default function Itinerary() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeReason, setUpgradeReason] = useState("");
 
+  const baselineRef = useRef<any>(null);
+  const localRef = useRef<any>(null);
+  localRef.current = localItinerary;
+
   useEffect(() => {
     if (!tripId) return;
+    baselineRef.current = null;
+    localRef.current = null;
     const unsub = onValue(
       ref(db, `trips/${tripId}`),
       snap => {
@@ -388,8 +497,15 @@ export default function Itinerary() {
         if (data) {
           setTrip(data);
           const itin = data.itinerary || null;
+          const prevBaseline = baselineRef.current;
+          const local = localRef.current;
+          baselineRef.current = itin;
           setItinerary(itin);
-          setLocalItinerary(itin ? JSON.parse(JSON.stringify(itin)) : null);
+          const dirty = local && JSON.stringify(local) !== JSON.stringify(prevBaseline);
+          setLocalItinerary(
+            itin && dirty ? mergeServerPricing(local, prevBaseline, itin)
+              : itin ? JSON.parse(JSON.stringify(itin)) : null
+          );
         }
         setLoading(false);
       },
@@ -401,6 +517,11 @@ export default function Itinerary() {
     );
     return () => unsub();
   }, [tripId]);
+
+  const tripCurrency: string | null = validPriceCurrency(trip?.currency) ? trip.currency : null;
+  const priceAutoKey = canShowItineraryKey(trip, itinerary);
+  const prices = useActivityPrices({ kind: "trip", id: tripId, user, autoKey: priceAutoKey });
+  const activityPriceSummary = summarizeActivityPrices((localItinerary?.days || []).flatMap((d: any) => d.activities || []));
 
   const isDirty = JSON.stringify(localItinerary) !== JSON.stringify(itinerary);
 
@@ -422,10 +543,23 @@ export default function Itinerary() {
   const saveChanges = async () => {
     if (!localItinerary || !tripId) return;
     setSaving(true);
+    setSaveError(null);
+    const draft = JSON.parse(JSON.stringify(localItinerary));
+    const capturedBaseline = baselineRef.current ? JSON.parse(JSON.stringify(baselineRef.current)) : null;
     try {
-      await set(ref(db, `trips/${tripId}/itinerary`), localItinerary);
+      const result = await runTransaction(ref(db, `trips/${tripId}/itinerary`), (current: any) => {
+        if (current === null || current === undefined) {
+          // Itinerary deleted elsewhere: abort rather than resurrect it.
+          return capturedBaseline === null ? draft : undefined;
+        }
+        return mergeServerPricing(draft, capturedBaseline, current);
+      });
+      if (!result.committed) throw new Error("This itinerary was removed by someone else, so your changes were not saved.");
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (e) {
+      // Draft stays in local state; nothing is discarded.
+      setSaveError(e instanceof Error ? e.message : "Could not save changes. Your edits are still here; try again.");
     } finally { setSaving(false); }
   };
 
@@ -851,6 +985,12 @@ export default function Itinerary() {
             </button>
           )}
         </nav>
+        {saveError && (
+          <div className="no-print flex items-center justify-center gap-2 px-6 py-2 text-sm bg-destructive/10 text-destructive border-b border-destructive/20" role="alert" data-testid="text-save-error">
+            <AlertCircle size={14}/> {saveError}
+            <button onClick={() => setSaveError(null)} className="ml-2 underline" data-testid="button-dismiss-save-error">Dismiss</button>
+          </div>
+        )}
 
         {/* print header */}
         {canShowItinerary && (
@@ -914,6 +1054,34 @@ export default function Itinerary() {
                     title={isPremium ? "Export as PDF" : "Pack Plus — Export PDF"}>
                     <FileDown size={14}/> Export PDF
                   </button>
+                  <button
+                    onClick={prices.verify}
+                    disabled={!user || (prices.running && prices.manual)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm border border-emerald-200 text-emerald-800 bg-emerald-50 rounded-full hover:bg-emerald-100 transition-colors disabled:opacity-60"
+                    title="Look up current prices from official sources"
+                    data-testid="button-verify-prices">
+                    {prices.running && prices.manual ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>}
+                    {prices.running && prices.manual ? "Verifying prices…" : "Verify prices"}
+                  </button>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" data-testid="status-activity-prices">
+                  <span>
+                    <span className="font-semibold text-foreground/80">
+                      {activityPriceSummary.totals.length ? activityPriceSummary.totals.map(t => t.label).join(" + ") : "No verified prices yet"}
+                    </span>
+                    {" "}per person · {activityPriceSummary.verifiedCount} source-verified
+                    {activityPriceSummary.hasFromPrices ? " (some are starting prices)" : ""}
+                    {activityPriceSummary.unknownCount > 0 ? ` · ${activityPriceSummary.unknownCount} unavailable, not counted` : ""}
+                  </span>
+                  {prices.running && (
+                    <span className="flex items-center gap-1"><Loader2 size={11} className="animate-spin"/> Checking sources{prices.checked ? ` · ${prices.checked} checked` : ""}</span>
+                  )}
+                  {prices.error && !prices.running && (
+                    <span className="flex items-center gap-1 text-destructive" data-testid="text-price-error">
+                      <AlertCircle size={11}/> {prices.error}
+                      <button onClick={prices.verify} className="underline ml-1" data-testid="button-retry-prices">Retry</button>
+                    </span>
+                  )}
                 </div>
               </motion.div>
 
@@ -983,7 +1151,7 @@ export default function Itinerary() {
                           return (
                             <motion.div key={ai} layout initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-8}} data-testid={`activity-${di+1}-${ai+1}`}>
                               {isEditing ? (
-                                <ActivityEditor activity={act} onSave={u=>handleEditSave(di,ai,u)} onCancel={()=>setEditingKey(null)}/>
+                                <ActivityEditor activity={act} onSave={u=>handleEditSave(di,ai,u)} onCancel={()=>setEditingKey(null)} tripCurrency={tripCurrency}/>
                               ) : (
                                 <>
                                   {/* screen card */}
@@ -1059,9 +1227,7 @@ export default function Itinerary() {
                                         )}
                                         <div className="ml-auto flex items-center gap-1.5">
                                           {/* Cost — sits in the action row, same line as Reserve/Calendar/Maps */}
-                                          <span className="flex items-center gap-0.5 text-xs font-semibold text-foreground/60 bg-muted/60 px-2.5 py-1 rounded-full border border-border/60">
-                                            <DollarSign size={11}/>~${act.estimatedCost}
-                                          </span>
+                                          <ActivityPrice activity={act} testId={`text-act-price-${di+1}-${ai+1}`}/>
                                           <a href={`https://www.viator.com/searchResults/all?text=${encodeURIComponent(`${act.name} ${day.city || trip?.destination || ""}`)}`}
                                             target="_blank" rel="noopener noreferrer"
                                             className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border border-amber-200 text-amber-600 bg-amber-50 hover:bg-amber-100 transition-colors"
@@ -1117,7 +1283,7 @@ export default function Itinerary() {
                                       </div>
                                     </div>
                                     <div className="print-activity-right">
-                                      <div className="print-cost">${act.estimatedCost}</div>
+                                      <div className="print-cost"><ActivityPricePrint activity={act}/></div>
                                     </div>
                                   </div>
                                 </>
@@ -1129,7 +1295,7 @@ export default function Itinerary() {
 
                       {/* add activity */}
                       {addingToDayIndex === di ? (
-                        <AddActivityForm dayIndex={di} onAdd={handleAddActivity} onCancel={()=>setAddingToDayIndex(null)} userName={user?.displayName || (trip?.members?.[user?.uid || ""]?.name) || "Member"}/>
+                        <AddActivityForm dayIndex={di} onAdd={handleAddActivity} onCancel={()=>setAddingToDayIndex(null)} userName={user?.displayName || (trip?.members?.[user?.uid || ""]?.name) || "Member"} tripCurrency={tripCurrency}/>
                       ) : (
                         <button
                           onClick={()=>{setEditingKey(null);setAddingToDayIndex(di);}}
@@ -1242,7 +1408,7 @@ export default function Itinerary() {
                               <div style={{fontSize:13,color:"#6b7280",lineHeight:1.5,fontFamily:"sans-serif"}}>{act.description}</div>
                             </div>
                             <div style={{minWidth:72,textAlign:"right",fontWeight:600,fontSize:14,fontFamily:"sans-serif",color:"#374151"}}>
-                              ${act.estimatedCost}
+                              {activityPricePresentation(act).label}
                             </div>
                           </div>
                         );

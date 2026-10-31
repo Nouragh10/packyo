@@ -274,7 +274,17 @@ test("four-day tool output returns every day at the requested pace in one call",
     body: JSON.stringify({ destination: "Lisbon", days: 4, vibes: ["Culture"], budget: "midrange", wishes: [] }),
   });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), plan);
+  const returned = await response.json() as {
+    title: string;
+    days: Array<{ activities: Array<{ estimatedCost: number | null; pricing: { status: string; checkedAt: string | null } }> }>;
+  };
+  assert.equal(returned.title, plan.title);
+  assert.equal(returned.days.length, plan.days.length);
+  for (const day of returned.days) for (const activity of day.activities) {
+    assert.equal(activity.estimatedCost, null);
+    assert.equal(activity.pricing.status, "unavailable");
+    assert.equal(activity.pricing.checkedAt, null);
+  }
   assert.equal(fetchCalls, 1);
   assert.equal(lastAiRequest.tool_choice.name, ITINERARY_TOOL);
   assert.equal(lastAiRequest.tools[0].input_schema.properties.days.minItems, 4);

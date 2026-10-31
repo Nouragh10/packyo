@@ -35,7 +35,7 @@ export function itineraryTool(days: number, activitiesPerDay: number) {
                     wishText: { type: "string" },
                     suggester: { type: "string" },
                     matchedVibe: { type: "string" },
-                    estimatedCost: { type: "number" },
+                estimatedCost: { type: ["number", "null"] },
                     labels: { type: "array", items: { type: "string" } },
                     nearPrevious: { type: "boolean" },
                     photoQuery: { type: "string" },
