@@ -32,7 +32,7 @@ paths:
       operationId: generateItinerary
       tags: [ai]
       summary: Generate AI trip itinerary
-      description: Uses Claude to generate a day-by-day itinerary based on trip details and wishes
+      description: Uses Claude to generate a complete day-by-day itinerary. Native clients should allow 180 seconds; generation and repairs share a 150-second server budget.
       requestBody:
         required: true
         content:
@@ -58,6 +58,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The AI could not return a complete itinerary after validation and repair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItineraryGenerationError"
+        "504":
+          description: Generation exceeded its server time budget
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItineraryGenerationError"
 
   /packing:
     post:
@@ -255,6 +267,17 @@ components:
       required:
         - status
 
+    ItineraryGenerationError:
+      type: object
+      required: [error, code, recoverable]
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+          enum: [INVALID_ITINERARY_RESPONSE, ITINERARY_TIMEOUT]
+        recoverable:
+          type: boolean
     ErrorResponse:
       type: object
       properties:

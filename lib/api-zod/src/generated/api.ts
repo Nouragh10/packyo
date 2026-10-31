@@ -18,7 +18,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Uses Claude to generate a day-by-day itinerary based on trip details and wishes
+ * Uses Claude to generate a complete day-by-day itinerary. Native clients should allow 180 seconds; generation and repairs share a 150-second server budget.
  * @summary Generate AI trip itinerary
  */
 export const GenerateItineraryBody = zod.object({

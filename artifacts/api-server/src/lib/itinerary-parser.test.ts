@@ -8,6 +8,7 @@ import {
   parseAccommodationSuggestionsResponse,
   parseItineraryResponse,
 } from "./itinerary-parser";
+import { ITINERARY_TOOL, type ItineraryAiResponse } from "./itinerary-output";
 
 function createItinerary(activityCount = 1, wishActivityCount = 0) {
   return {
@@ -158,7 +159,9 @@ let server: Server;
 let baseUrl: string;
 let originalFetch: typeof globalThis.fetch;
 let fetchCalls = 0;
-let aiResponses: string[] = [];
+let aiResponses: Array<string | ItineraryAiResponse> = [];
+let lastAiRequest: Record<string, any> = {};
+let aiError: Error | null = null;
 
 before(async () => {
   process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL = "https://ai.example.test";
@@ -167,14 +170,17 @@ before(async () => {
   process.env.LOG_LEVEL = "silent";
 
   originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => {
+  globalThis.fetch = async (_url, init) => {
     fetchCalls += 1;
-    return new Response(JSON.stringify({
+    lastAiRequest = JSON.parse(String(init?.body ?? "{}"));
+    if (aiError) throw aiError;
+    const response = aiResponses.shift() ?? '{"title":"Truncated","days":[{"dayNumber":1';
+    return new Response(JSON.stringify(typeof response === "string" ? {
       content: [{
         type: "text",
-        text: aiResponses.shift() ?? '{"title":"Truncated","days":[{"dayNumber":1',
+        text: response,
       }],
-    }), {
+    } : response), {
       status: 200,
       headers: { "content-type": "application/json" },
     });
@@ -246,4 +252,50 @@ test("accepts overflow activities needed to retain guaranteed wishes", async () 
   const itinerary = await response.json() as ReturnType<typeof createItinerary>;
   assert.equal(itinerary.days[0]?.activities.length, 4);
   assert.equal(fetchCalls, 1);
+});
+
+test("four-day tool output returns every day at the requested pace in one call", async () => {
+  fetchCalls = 0;
+  const plan = {
+    title: "Four complete days",
+    days: Array.from({ length: 4 }, (_, day) => ({
+      ...createItinerary(5).days[0],
+      dayNumber: day + 1,
+      activities: createItinerary(5).days[0]!.activities.map((activity, slot) => ({
+        ...activity,
+        name: `Day ${day + 1} unique venue ${slot + 1}`,
+      })),
+    })),
+  };
+  aiResponses = [{ content: [{ type: "tool_use", name: ITINERARY_TOOL, input: plan }] }];
+  const response = await originalFetch(`${baseUrl}/api/itinerary`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ destination: "Lisbon", days: 4, vibes: ["Culture"], budget: "midrange", wishes: [] }),
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), plan);
+  assert.equal(fetchCalls, 1);
+  assert.equal(lastAiRequest.tool_choice.name, ITINERARY_TOOL);
+  assert.equal(lastAiRequest.tools[0].input_schema.properties.days.minItems, 4);
+  assert.equal(lastAiRequest.tools[0].input_schema.properties.days.maxItems, 4);
+  assert.equal(lastAiRequest.tools[0].input_schema.properties.days.items.properties.activities.minItems, 5);
+  assert.equal(lastAiRequest.messages.length, 1, "forced tool calls must not use assistant prefill");
+});
+
+test("upstream timeout returns a recoverable response instead of an unhandled connection error", async () => {
+  aiError = new DOMException("AI deadline reached", "TimeoutError");
+  try {
+    const response = await originalFetch(`${baseUrl}/api/itinerary`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ destination: "Lisbon", days: 1, vibes: ["Culture"], budget: "midrange", wishes: [] }),
+    });
+    assert.equal(response.status, 504);
+    const result = await response.json() as { code: string; recoverable: boolean };
+    assert.equal(result.code, "ITINERARY_TIMEOUT");
+    assert.equal(result.recoverable, true);
+  } finally {
+    aiError = null;
+  }
 });

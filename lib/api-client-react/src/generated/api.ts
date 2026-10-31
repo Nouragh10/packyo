@@ -25,6 +25,7 @@ import type {
   ExpenseInput,
   ExpenseLedger,
   HealthStatus,
+  ItineraryGenerationError,
   ItineraryInput,
   ItineraryResult,
   PackingInput,
@@ -131,7 +132,7 @@ export const getGenerateItineraryUrl = () => {
 }
 
 /**
- * Uses Claude to generate a day-by-day itinerary based on trip details and wishes
+ * Uses Claude to generate a complete day-by-day itinerary. Native clients should allow 180 seconds; generation and repairs share a 150-second server budget.
  * @summary Generate AI trip itinerary
  */
 export const generateItinerary = async (itineraryInput: ItineraryInput, options?: RequestInit): Promise<ItineraryResult> => {
@@ -149,7 +150,7 @@ export const generateItinerary = async (itineraryInput: ItineraryInput, options?
 
 
 
-export const getGenerateItineraryMutationOptions = <TError = ErrorType<ErrorResponse>,
+export const getGenerateItineraryMutationOptions = <TError = ErrorType<ErrorResponse | ItineraryGenerationError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateItinerary>>, TError,{data: BodyType<ItineraryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof generateItinerary>>, TError,{data: BodyType<ItineraryInput>}, TContext> => {
 
@@ -178,12 +179,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type GenerateItineraryMutationResult = NonNullable<Awaited<ReturnType<typeof generateItinerary>>>
     export type GenerateItineraryMutationBody = BodyType<ItineraryInput>
-    export type GenerateItineraryMutationError = ErrorType<ErrorResponse>
+    export type GenerateItineraryMutationError = ErrorType<ErrorResponse | ItineraryGenerationError>
 
     /**
  * @summary Generate AI trip itinerary
  */
-export const useGenerateItinerary = <TError = ErrorType<ErrorResponse>,
+export const useGenerateItinerary = <TError = ErrorType<ErrorResponse | ItineraryGenerationError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateItinerary>>, TError,{data: BodyType<ItineraryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof generateItinerary>>,

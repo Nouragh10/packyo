@@ -1,5 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
+import { setTimeout as wait } from "node:timers/promises";
+import { itineraryTool, itineraryResponseText, ITINERARY_TOOL, type ItineraryAiResponse } from "../lib/itinerary-output";
 import { GenerateItineraryBody, GeneratePackingListBody } from "@workspace/api-zod";
 import { getAdminDb, getAdminApp } from "../lib/firebase-admin";
 import { accommodationRanking, type AccommodationBallot } from "../lib/accommodation-votes";
@@ -79,9 +81,9 @@ function activityTimeGuidance(value: unknown): string {
   return "This is a late-night slot: choose nightlife, a late venue, or another activity explicitly confirmed open this late. Do not choose daytime-only attractions.";
 }
 
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const pauseForRateLimit = (ms: number, signal?: AbortSignal) => wait(ms, undefined, { signal });
 
-async function callAnthropic(body: object, retries = 3, extraHeaders: Record<string, string> = {}): Promise<Response> {
+async function callAnthropic(body: object, retries = 3, extraHeaders: Record<string, string> = {}, signal?: AbortSignal): Promise<Response> {
   const baseUrl = process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL;
   const apiKey = process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
 
@@ -101,11 +103,12 @@ async function callAnthropic(body: object, retries = 3, extraHeaders: Record<str
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal,
     });
     if (response.status !== 429) return response as unknown as Response;
     const wait = (i + 1) * 8000;
     console.log(`gopack: rate limited, retrying in ${wait}ms`);
-    await sleep(wait);
+    await pauseForRateLimit(wait, signal);
   }
   throw new Error("Rate limit exceeded after retries. Please try again in a minute.");
 }
@@ -216,6 +219,7 @@ async function dedupeItineraryVenues(
   itinerary: ItineraryShape,
   destination: string,
   log: { warn: (obj: object, msg: string) => void; error: (obj: object, msg: string) => void },
+  signal?: AbortSignal,
 ): Promise<ItineraryShape> {
   const dupes = findDuplicateSlots(itinerary);
   if (dupes.length === 0) return itinerary;
@@ -246,7 +250,7 @@ Respond with ONLY a JSON array, one object per duplicate slot IN THE SAME ORDER 
       system: "You are a JSON API. Always respond with only a valid JSON array. No preamble, no explanation, no markdown code blocks.",
       messages: [{ role: "user", content: repairPrompt }],
     };
-    const response = await callAnthropic(body);
+    const response = await callAnthropic(body, 3, {}, signal);
     const data = await (response as unknown as globalThis.Response).json() as {
       content?: Array<{ type: string; text?: string }>;
       error?: { message: string };
@@ -596,7 +600,7 @@ Respond with ONLY valid JSON in this exact format (no markdown, no extra text):
         {
           "time": "9:00 AM",
           "name": "Activity name",
-          "description": "1-2 sentence description with practical tip",
+          "description": "One practical tip, at most 12 words",
           "tag": "${vibes[0]?.toLowerCase() ?? "culture"}",
           "fromWish": true,
           "wishId": "optional stable ID from a guaranteed wish",
@@ -616,22 +620,19 @@ Respond with ONLY valid JSON in this exact format (no markdown, no extra text):
 }`;
 
   try {
+    // Bound initial generation and any repairs below the mobile request budget.
+    const generationSignal = AbortSignal.timeout(150_000);
     const body = {
       model: "claude-haiku-4-5",
-      max_tokens: 8192,
-      system: "You are a JSON API. Always respond with only valid JSON. No preamble, no explanation, no markdown code blocks. Never start your response with words — start directly with the opening brace {.",
-      messages: [
-        { role: "user", content: prompt },
-        { role: "assistant", content: "{" },
-      ],
+      max_tokens: Math.min(24000, Math.max(8192, days * 2200)),
+      system: "Use submit_itinerary to return the complete plan. Keep descriptions under 12 words and themes short. Never omit a required day, activity slot, or guaranteed wish. For guaranteed wishes, use fromWish=true and copy the exact wishId and original wishText. Do not produce introductory prose.",
+      tools: [itineraryTool(days, activitiesPerDay)],
+      tool_choice: { type: "tool", name: ITINERARY_TOOL, disable_parallel_tool_use: true },
+      messages: [{ role: "user", content: prompt }],
     };
 
-    const response = await callAnthropic(body);
-    const data = await (response as unknown as globalThis.Response).json() as {
-      content?: Array<{ type: string; text?: string }>;
-      error?: { message: string };
-      stop_reason?: string;
-    };
+    const response = await callAnthropic(body, 3, {}, generationSignal);
+    const data = await (response as unknown as globalThis.Response).json() as ItineraryAiResponse;
 
     if (!(response as unknown as globalThis.Response).ok) {
       req.log.error({ data }, "Anthropic API error (itinerary)");
@@ -639,10 +640,7 @@ Respond with ONLY valid JSON in this exact format (no markdown, no extra text):
       return;
     }
 
-    const allText = (data.content ?? [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text ?? "")
-      .join("");
+    const allText = itineraryResponseText(data);
 
     if (data.stop_reason === "max_tokens") {
       req.log.warn({ chars: allText.length }, "Itinerary response truncated at max_tokens");
@@ -667,37 +665,30 @@ Respond with ONLY valid JSON in this exact format (no markdown, no extra text):
           role: "user",
           content: `${prompt}
 
-IMPORTANT RETRY: The previous response was not valid JSON. Return a compact, complete JSON object now. Keep every required field and exactly the requested number of days. Include at least the requested activity pace on every day, but add extra activities when needed to retain every guaranteed wish. Keep descriptions under 8 words. Do not use markdown, comments, or any text outside the JSON object.`,
-        }, { role: "assistant", content: "{" }],
+IMPORTANT RETRY: The previous plan failed validation: ${firstParseError instanceof Error ? firstParseError.message : "incomplete plan"}. Submit a compact, complete plan using submit_itinerary. Keep every required field and exactly ${days} days. Include at least ${activitiesPerDay} activities EVERY day, adding extra when needed to retain every guaranteed wish. Copy each guaranteed wishId exactly and set fromWish=true. Keep descriptions under 8 words.`,
+        }],
       };
       try {
-        const retryResponse = await callAnthropic(retryBody);
-        const retryData = await (retryResponse as unknown as globalThis.Response).json() as {
-          content?: Array<{ type: string; text?: string }>;
-          error?: { message: string };
-          stop_reason?: string;
-        };
+        const retryResponse = await callAnthropic(retryBody, 3, {}, generationSignal);
+        const retryData = await (retryResponse as unknown as globalThis.Response).json() as ItineraryAiResponse;
         if (!(retryResponse as unknown as globalThis.Response).ok) {
           throw new Error(retryData.error?.message ?? "AI itinerary retry failed.");
         }
-        const retryText = (retryData.content ?? [])
-          .filter((b) => b.type === "text")
-          .map((b) => b.text ?? "")
-          .join("");
+        const retryText = itineraryResponseText(retryData);
         itinerary = parseItineraryResponse(retryText, {
           expectedDays: days,
           activitiesPerDay,
           guaranteedWishes,
         });
       } catch (retryError) {
-        if (retryError instanceof ItineraryResponseError) throw retryError;
+        if (generationSignal.aborted || retryError instanceof ItineraryResponseError) throw retryError;
         throw new ItineraryResponseError(
           "The AI could not return a complete itinerary after retrying.",
           { cause: retryError },
         );
       }
     }
-    const dedupedItinerary = await dedupeItineraryVenues(itinerary, destination, req.log);
+    const dedupedItinerary = await dedupeItineraryVenues(itinerary, destination, req.log, generationSignal);
     // Keep the invariant true after post-processing as well as after the
     // model response. This also protects future itinerary repair passes.
     res.json(parseItineraryResponse(JSON.stringify(dedupedItinerary), {
@@ -712,6 +703,15 @@ IMPORTANT RETRY: The previous response was not valid JSON. Return a compact, com
         error: "We could not build a complete itinerary right now. Please try again.",
         code: err.code,
         recoverable: err.recoverable,
+      });
+      return;
+    }
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      req.log.warn({}, "Itinerary generation exceeded its request budget");
+      res.status(504).json({
+        error: "Planning took longer than expected. Your wishes are saved. Please try again.",
+        code: "ITINERARY_TIMEOUT",
+        recoverable: true,
       });
       return;
     }

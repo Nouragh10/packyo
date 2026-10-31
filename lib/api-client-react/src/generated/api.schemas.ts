@@ -111,6 +111,20 @@ export interface HealthStatus {
   status: string;
 }
 
+export type ItineraryGenerationErrorCode = typeof ItineraryGenerationErrorCode[keyof typeof ItineraryGenerationErrorCode];
+
+
+export const ItineraryGenerationErrorCode = {
+  INVALID_ITINERARY_RESPONSE: 'INVALID_ITINERARY_RESPONSE',
+  ITINERARY_TIMEOUT: 'ITINERARY_TIMEOUT',
+} as const;
+
+export interface ItineraryGenerationError {
+  error: string;
+  code: ItineraryGenerationErrorCode;
+  recoverable: boolean;
+}
+
 export interface ErrorResponse {
   error: string;
 }

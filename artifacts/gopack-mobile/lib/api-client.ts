@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { fetchWithTimeout } from "./timed-fetch";
 
 let _baseUrl: string | null = null;
 
@@ -34,7 +35,8 @@ export function getApiBaseUrl(): string {
   return baseUrl;
 }
 
-export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+export function apiFetch(path: string, init?: RequestInit, timeoutMs?: number): Promise<Response> {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return fetch(`${getApiBaseUrl()}${normalizedPath}`, init);
+  const url = `${getApiBaseUrl()}${normalizedPath}`;
+  return timeoutMs === undefined ? fetch(url, init) : fetchWithTimeout(url, init, timeoutMs);
 }

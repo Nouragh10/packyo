@@ -20,6 +20,8 @@ export * from './expenseRecordShares';
 export * from './expenseRepayment';
 export * from './healthStatus';
 export * from './itineraryDay';
+export * from './itineraryGenerationError';
+export * from './itineraryGenerationErrorCode';
 export * from './itineraryInput';
 export * from './itineraryResult';
 export * from './packingInput';
