@@ -51,6 +51,7 @@ import { Mascot } from "@/components/Mascot";
 import { WikiImage } from "@/components/WikiImage";
 import { TripExpenses } from "@/components/TripExpenses";
 import { TripOverview } from "@/components/TripOverview";
+import { activityTimeLabel } from "@/lib/activity-time";
 
 const MEMBER_COLORS = ["#F15A3A", "#F4BC55", "#A77BD6", "#68B7A0", "#EE9D54", "#6EA6D8"];
 
@@ -1005,7 +1006,7 @@ function ActivityCard({
       style={({ pressed }) => [styles.actRow, { opacity: pressed ? 0.85 : 1 }]}
       onPress={onCardPress}
     >
-      <Text style={[styles.actTime, { color: colors.foreground }]}>{activity.time}</Text>
+      <Text style={[styles.actTime, { color: colors.foreground }]}>{activityTimeLabel(activity.time)}</Text>
       <View style={styles.actContent}>
         <View style={styles.actHeaderRow}>
           <Text style={[styles.actName, { color: colors.foreground }]}>{activity.name}</Text>

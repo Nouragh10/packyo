@@ -26,3 +26,4 @@
 - [React Native Firebase uploads](react-native-firebase-uploads.md) — Firebase Storage blob helpers can fail on iOS; use Expo’s native binary transfer against Storage REST.
 - [Curated saves and ties](packyo-curated-saves.md) — profile saves require explicit curation; reused items vote normally; accommodation ties wait for an explicit tiebreak.
 - [Firebase financial boundaries](firebase-financial-boundaries.md) — keep ledgers outside broad trip grants; handle cold-cache nulls before aborting transactions.
+- [Trip screen failures](trip-screen-failures.md) — opening a saved plan can crash independently of successful generation; inspect legacy value types before retrying AI.

@@ -4,22 +4,11 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 
 import { useColors } from "@/hooks/useColors";
 import type { Activity, Trip, TripMember, Wish } from "@/hooks/useFirebase";
+import { activityTimeLabel, parseActivityTime } from "@/lib/activity-time";
 
 const MEMBER_COLORS = ["#F15A3A", "#F4BC55", "#A77BD6", "#68B7A0", "#EE9D54", "#6EA6D8"];
 
 type MemberWithPhoto = TripMember & { photoURL?: string | null };
-
-function parseTime(t: string): { h: number; m: number } | null {
-  const m = t?.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const min = parseInt(m[2], 10);
-  const ap = m[3]?.toUpperCase();
-  if (min > 59 || h > (ap ? 12 : 23) || (ap && h < 1)) return null;
-  if (ap === "PM" && h !== 12) h += 12;
-  if (ap === "AM" && h === 12) h = 0;
-  return { h, m: min };
-}
 
 function dayDate(start: string, dayNumber: number): Date {
   const d = new Date(`${start}T00:00:00`);
@@ -82,7 +71,7 @@ export function TripOverview({ trip, wishes, currentUid, onOpen }: Props) {
       let at: Date | null = null;
       if (trip.startDate) {
         const base = dayDate(trip.startDate, d.dayNumber);
-        const t = parseTime(a.time);
+        const t = parseActivityTime(a.time);
         if (t) { base.setHours(t.h, t.m, 0, 0); at = base; }
         else at = null;
       }
@@ -169,7 +158,7 @@ export function TripOverview({ trip, wishes, currentUid, onOpen }: Props) {
                 <View style={{ flex: 1 }}>
                   <Text style={[s.rowTitle, { color: colors.foreground }]} numberOfLines={1}>{activity.name}</Text>
                   <Text style={[s.rowSub, { color: colors.mutedForeground }]}>
-                    Day {day}{at ? ` · ${at.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}` : ""}{activity.time ? ` · ${activity.time}` : ""}
+                    Day {day}{at ? ` · ${at.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}` : ""} · {activityTimeLabel(activity.time)}
                   </Text>
                 </View>
               </View>

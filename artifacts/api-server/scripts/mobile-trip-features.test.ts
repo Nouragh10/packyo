@@ -9,6 +9,25 @@ const { classifyActivity, sameCity, keySegment } = require("../../gopack-mobile/
 const { currencyDigits, parseMoneyInput, minorToInput, isValidISODate } = require("../../gopack-mobile/lib/expense-money");
 const { accommodationBallot } = require("../../gopack-mobile/lib/accommodation-ballot");
 const { fetchWithTimeout } = require("../../gopack-mobile/lib/timed-fetch");
+const { activityTimeLabel, parseActivityTime } = require("../../gopack-mobile/lib/activity-time");
+
+test("legacy numeric activity times cannot crash Overview", () => {
+  for (const value of [3, 7, 2, 12.3, "3", "7", "12.3", null, undefined, {}, [], true]) {
+    assert.equal(parseActivityTime(value), null);
+    assert.equal(activityTimeLabel(value), "Flexible time");
+  }
+});
+
+test("Overview interprets clock times without guessing ambiguous numeric hours", () => {
+  assert.deepEqual(parseActivityTime("9:15 AM"), { h: 9, m: 15 });
+  assert.deepEqual(parseActivityTime("12:00 AM"), { h: 0, m: 0 });
+  assert.deepEqual(parseActivityTime("12:30 PM"), { h: 12, m: 30 });
+  assert.deepEqual(parseActivityTime(" 19:45 "), { h: 19, m: 45 });
+  for (const value of ["25:00", "12:70", "0:30 PM", "9:00–10:00", "Flexible"]) {
+    assert.equal(parseActivityTime(value), null);
+  }
+  assert.equal(activityTimeLabel("9:15 AM"), "9:15 AM");
+});
 
 function fakeRequest(status = 200, responseText = '{"days":[]}') {
   return {
