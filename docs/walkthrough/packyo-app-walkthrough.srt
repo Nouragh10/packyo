@@ -1,0 +1,235 @@
+1
+00:00:00,000 --> 00:00:04,000
+Welcome to Packyo
+Actual mobile-app screens, recorded in the browser. Demonstration data is isolated from real travellers.
+
+2
+00:00:04,000 --> 00:00:08,000
+Sign in to your account
+Email sign-in is available alongside Google and Apple. No real credentials are shown.
+
+3
+00:00:08,000 --> 00:00:13,500
+Your trips at a glance
+Actual app screens with an isolated demo pack. Plan together, vote and manage the trip.
+
+4
+00:00:13,500 --> 00:00:18,500
+Create a trip
+Choose a destination, dates, budget, pack and travel vibes.
+
+5
+00:00:18,500 --> 00:00:23,250
+Join your pack
+Join an existing trip with its invitation code. No real invitations are sent in this recording.
+
+6
+00:00:23,250 --> 00:00:28,000
+The trip hub
+See members and planning progress. Invite the pack and complete the checklist.
+
+7
+00:00:28,000 --> 00:00:32,750
+Everyone shares preferences
+Collect vibes, travel distance, budget and pace before choosing a destination.
+
+8
+00:00:32,750 --> 00:00:37,500
+Vote on destinations
+Compare destination suggestions and vote as a group.
+
+9
+00:00:37,500 --> 00:00:42,250
+Discover real trip ideas
+Open a shared itinerary, see its rating, travellers and where the pack stayed.
+
+10
+00:00:42,250 --> 00:00:46,750
+Save a stay
+Save accommodation from a Discover itinerary to your profile.
+
+11
+00:00:46,750 --> 00:00:52,750
+Save an activity
+Activities have category labels. Save British Museum to reuse on another London trip.
+
+12
+00:00:52,750 --> 00:00:57,500
+Your travel profile
+Your profile brings together trips, wishes, saved stays, activities and memories.
+
+13
+00:00:57,500 --> 00:01:02,250
+Explicitly saved activities
+Only activities you choose to save belong here. Voting does not automatically save them.
+
+14
+00:01:02,250 --> 00:01:07,000
+Your saved stays
+Keep stays from Discover ready to reuse when planning the same destination.
+
+15
+00:01:07,000 --> 00:01:11,750
+Build the pack wishlist
+Each traveller adds wishes. Expand a member to view or add their activities.
+
+16
+00:01:11,750 --> 00:01:17,750
+Reuse a saved activity
+Saved activities for this destination can become normal, votable wishes.
+
+17
+00:01:17,750 --> 00:01:23,750
+Add the saved wish
+British Museum is added to the new trip's wishlist rather than being automatically copied.
+
+18
+00:01:23,750 --> 00:01:28,500
+Vote on wishes
+Swipe or use the love and skip controls. Track which members have finished voting.
+
+19
+00:01:28,500 --> 00:01:33,250
+Review wishlist results
+See the pack's activity preferences before building the itinerary.
+
+20
+00:01:33,250 --> 00:01:38,000
+Find somewhere to stay
+Add a listing, submit stay preferences or reuse a saved stay.
+
+21
+00:01:38,000 --> 00:01:42,750
+Accommodation preferences
+Collect budget, property type, rooms, location and amenities.
+
+22
+00:01:42,750 --> 00:01:48,250
+Reuse a saved stay
+Open saved stays for the same destination and add one as a voting option.
+
+23
+00:01:48,250 --> 00:01:54,000
+Add a stay for the pack
+A saved stay becomes a normal accommodation suggestion, not an automatic booking.
+
+24
+00:01:54,000 --> 00:01:59,500
+Tied stays stay tied
+Both tied options display WINNER. Packyo only breaks the vote when the creator requests it.
+
+25
+00:01:59,500 --> 00:02:05,250
+Ask Packyo to break the tie
+The creator explicitly requests a choice between the tied winners.
+
+26
+00:02:05,250 --> 00:02:09,750
+One chosen stay
+After the requested tiebreak, Book this one appears for the selected stay. No booking is made.
+
+27
+00:02:09,750 --> 00:02:14,500
+Live AI itinerary generation
+This chapter starts a real itinerary request for the temporary one-day London trip.
+
+28
+00:02:14,500 --> 00:02:19,250
+The generated result
+The live request returns a new itinerary for this demo trip.
+
+29
+00:02:19,250 --> 00:02:24,000
+Your trip overview
+Destination, dates, budget, pack members and vibes appear before the day-by-day itinerary.
+
+30
+00:02:24,000 --> 00:02:28,500
+Wishes and upcoming activities
+See what is coming up and who suggested the wishes included in your plan.
+
+31
+00:02:28,500 --> 00:02:33,250
+The day-by-day itinerary
+Browse scheduled activities, categories and who suggested each wish.
+
+32
+00:02:33,250 --> 00:02:38,000
+Activity details
+Open an activity for its description, practical details and price status.
+
+33
+00:02:38,000 --> 00:02:43,500
+Edit your itinerary
+Open an activity to change its name, time, description or manually entered price.
+
+34
+00:02:43,500 --> 00:02:49,000
+Redo activity choices
+Request a replacement or a different part of an activity. Changes remain within the trip.
+
+35
+00:02:49,000 --> 00:02:54,500
+Add another activity
+Use the add-activity tools to extend the plan.
+
+36
+00:02:54,500 --> 00:02:59,000
+Price transparency
+Unverified prices say Price unavailable. Verify prices looks for source-backed amounts, not AI guesses.
+
+37
+00:02:59,000 --> 00:03:03,750
+Live price research
+Price checks run separately from itinerary generation. Unknown amounts remain unavailable.
+
+38
+00:03:03,750 --> 00:03:08,500
+Check sources before booking
+Verified entries show their source and check date; unavailable prices are excluded from totals.
+
+39
+00:03:08,500 --> 00:03:13,000
+Practical trip information
+Keep trip information together alongside your itinerary.
+
+40
+00:03:13,000 --> 00:03:17,750
+Map and directions
+See the day's stops and open directions in an external maps app.
+
+41
+00:03:17,750 --> 00:03:22,500
+The packing checklist
+Manage essentials and clothing. Check items off as you pack.
+
+42
+00:03:22,500 --> 00:03:27,250
+Shared expenses
+Track total spending, your balance, member balances and recent expenses.
+
+43
+00:03:27,250 --> 00:03:31,750
+Add and split an expense
+Choose who paid, who shares the cost, and equal or custom splits.
+
+44
+00:03:31,750 --> 00:03:36,500
+Settle up
+Record repayment between members. Packyo tracks the record; it does not transfer money.
+
+45
+00:03:36,500 --> 00:03:41,250
+Talk with your pack
+Keep planning conversations inside the trip.
+
+46
+00:03:41,250 --> 00:03:45,750
+Share and export
+Export options include PDF and calendar. Native iOS share sheets require the installed app.
+
+47
+00:03:45,750 --> 00:03:50,500
+Plan together with Packyo
+Actual app pages, real interactions and isolated demo data. No real bookings, payments or invitations were made.
+
