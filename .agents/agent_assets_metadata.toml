@@ -71,3 +71,18 @@ uri = "file://artifacts/packyo-mobile-tour/public/audio/bg_music.mp3"
 type = "audio"
 title = "Packyo tour background music"
 description = "Generated music: Warm upbeat nu-disco and modern travel-pop instrumental background music scoring a collaborative mobile trip-planning product tour. Clean bass, light percussion, muted guitar, airy s…"
+logical_id = "3a01542f-f5fe-49e0-a154-cd0b1f7580b2"
+
+[[outputs]]
+id = "1nUIyqvFDb7FSgy-BmPC6"
+uri = "file://docs/walkthrough/packyo-app-walkthrough.mp4"
+type = "video"
+title = "Updated Packyo walkthrough"
+description = "Updated walkthrough showing the original activity cost estimator, without the verified-totals section or Verify prices button."
+logical_id = "13973cdd-3d90-4f60-96c8-d707f810572e"
+content_hash = "sha256:18aa1f4b6ba65cfd3a59d4cd7bc55f3308af865cbfa65e0ff14630c02944c58e"
+size = 2554246
+mtime_ms = 1794037323749
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:8ed2d0d2-c55a-4424-9e13-62598996a9e7/13973cdd-3d90-4f60-96c8-d707f810572e/a61f36a6-182d-494c-aa9e-e4508051a8e0"
+storage_version_token = "1794037354251741"
+content_type = "video/mp4"

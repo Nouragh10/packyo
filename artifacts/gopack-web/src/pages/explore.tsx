@@ -5,6 +5,7 @@ import {
   MapPin, Star, Users, ArrowLeft, Sparkles, Loader2,
   MessageSquare, CalendarDays, Camera, Search, Sun,
 } from "lucide-react";
+import { ActivityPrice } from "@/components/ActivityPrice";
 import { usePublicReviews, useGlobalStats } from "@/hooks/useFirebase";
 
 const MONTHLY_PICKS = [
@@ -92,7 +93,7 @@ function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
   );
 }
 
-function ItineraryPreview({ days, tripDays }: { days: any[]; tripDays: number }) {
+function ItineraryPreview({ days, tripDays, reviewId }: { days: any[]; tripDays: number; reviewId: string }) {
   return (
     <div className="mt-4 rounded-xl overflow-hidden border border-border/70 text-[11px]">
       <div className="bg-foreground text-background px-3 py-2 flex items-center gap-1.5 font-semibold">
@@ -114,6 +115,9 @@ function ItineraryPreview({ days, tripDays }: { days: any[]; tripDays: number })
                   >
                     {a.time && <span className="text-foreground/50 mr-1">{a.time}</span>}
                     {a.name}
+                    <span className="ml-1.5 inline-block align-middle scale-90 origin-left">
+                      <ActivityPrice activity={a} compact testId={`text-review-price-${di}-${ai}`}/>
+                    </span>
                   </div>
                 ))}
               </div>
@@ -440,7 +444,7 @@ export default function Explore() {
 
                     {/* Itinerary preview */}
                     {review.itineraryDays?.length > 0 ? (
-                      <ItineraryPreview days={review.itineraryDays} tripDays={review.days} />
+                      <ItineraryPreview days={review.itineraryDays} tripDays={review.days} reviewId={review.id} />
                     ) : (
                       <div className="mt-4 rounded-xl border border-border/70 overflow-hidden text-[11px]">
                         <div className="bg-foreground text-background px-3 py-2 flex items-center gap-1.5 font-semibold">

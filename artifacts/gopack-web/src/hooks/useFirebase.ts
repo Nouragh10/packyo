@@ -76,6 +76,8 @@ function normalizeReview(id: string, v: any) {
             time: a.time || "",
             name: a.name || "",
             category: a.category || "",
+            ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
+            ...(a.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
           })),
         }))
       : null;
@@ -376,10 +378,13 @@ export function useTrip(tripId: string) {
             const itineraryDays = (data.itinerary.days as any[]).map((d: any, di: number) => ({
               day: d.day ?? di + 1,
               theme: d.theme || d.title || `Day ${d.day ?? di + 1}`,
+              city: d.city || "",
               activities: (d.activities || []).slice(0, 5).map((a: any) => ({
                 time: a.time || "",
                 name: a.name || "",
                 category: a.category || "",
+                ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
+                ...(a.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
               })),
             }));
             const patched = { ...data.review, itineraryDays };
@@ -490,6 +495,8 @@ export function useTrip(tripId: string) {
             time: a.time || "",
             name: a.name || "",
             category: a.category || "",
+            ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
+            ...(a.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
           })),
         }))
       : null;

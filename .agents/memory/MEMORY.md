@@ -3,7 +3,7 @@
 - [OpenAPI body naming](openapi-body-naming.md) — body schemas must be entity-shaped (ItineraryInput not GenerateItineraryBody) or TS2308 collision breaks typecheck
 - [Expo SDK 54 + Firebase babel fix](expo-babel-firebase.md) — installing firebase pulls @babel/core@8.x; must add workspace-level pnpm override `"@babel/core": "^7.26.0"` to keep Expo SDK 54 bundling
 - [expo-clipboard version for SDK 54](expo-clipboard-sdk54.md) — expo-clipboard for Expo SDK 54 is ~8.0.8; plain `pnpm add expo-clipboard` installs wrong major; pin explicitly
-- [AI venue verification needs live web search](ai-venue-verification.md) — LLM training data can't know current open/closed status; prompt-only fixes fail, must use real search tool
+- [Venue checks and activity estimates](ai-venue-verification.md) — verify venue facts live, but keep the original activity estimator; the user removed price verification.
 - [Stale git lock files block bash git ops](git-lock-workaround.md) — bash tool blocks any write touching `.git/*.lock`; clear + git add/commit/push via the code_execution sandbox instead
 - [Firebase anonymous auth disabled](firebase-anon-auth-disabled.md) — gopack's "Continue as guest" fails with ADMIN_ONLY_OPERATION; blocks e2e tests needing login
 - [Clone artifact isolation](clone-artifact-isolation.md) — duplicate artifact routes in a cloned GoPack copy can conflict with live previews; isolate clone registrations.
@@ -26,3 +26,4 @@
 - [React Native Firebase uploads](react-native-firebase-uploads.md) — Firebase Storage blob helpers can fail on iOS; use Expo’s native binary transfer against Storage REST.
 - [Curated saves and ties](packyo-curated-saves.md) — profile saves require explicit curation; reused items vote normally; accommodation ties wait for an explicit tiebreak.
 - [Firebase financial boundaries](firebase-financial-boundaries.md) — keep ledgers outside broad trip grants; handle cold-cache nulls before aborting transactions.
+- [Trip screen failures](trip-screen-failures.md) — opening a saved plan can crash independently of successful generation; inspect legacy value types before retrying AI.

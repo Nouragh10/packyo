@@ -5,6 +5,77 @@
  * GoPack AI Group Travel Planner API
  * OpenAPI spec version: 0.1.0
  */
+export interface ActivityPriceCheckInput {
+  force?: boolean;
+  /**
+     * @minimum 0
+     * @maximum 2000
+     */
+  cursor?: number;
+}
+
+export interface ActivityPriceCheckResult {
+  checked: number;
+  verified: number;
+  unavailable: number;
+  remaining: number;
+  /** @nullable */
+  nextCursor: number | null;
+  busy?: boolean;
+}
+
+export type ActivityPricingStatus = typeof ActivityPricingStatus[keyof typeof ActivityPricingStatus];
+
+
+export const ActivityPricingStatus = {
+  verified: 'verified',
+  unavailable: 'unavailable',
+  user_entered: 'user_entered',
+} as const;
+
+export type ActivityPricingPriceType = typeof ActivityPricingPriceType[keyof typeof ActivityPricingPriceType];
+
+
+export const ActivityPricingPriceType = {
+  fixed: 'fixed',
+  from: 'from',
+  range: 'range',
+  free: 'free',
+} as const;
+
+export type ActivityPricingScope = typeof ActivityPricingScope[keyof typeof ActivityPricingScope];
+
+
+export const ActivityPricingScope = {
+  admission: 'admission',
+  tour: 'tour',
+  menu_item: 'menu_item',
+  transport: 'transport',
+  other: 'other',
+} as const;
+
+export interface ActivityPricing {
+  status: ActivityPricingStatus;
+  /** @nullable */
+  amount: number | null;
+  /** @nullable */
+  currency: string | null;
+  priceType?: ActivityPricingPriceType;
+  /** @nullable */
+  maxAmount?: number | null;
+  scope?: ActivityPricingScope;
+  /** @nullable */
+  sourceUrl?: string | null;
+  /** @nullable */
+  sourceTitle?: string | null;
+  /** @nullable */
+  evidence?: string | null;
+  /** @nullable */
+  checkedAt: string | null;
+  activityName?: string;
+  note?: string;
+}
+
 export interface ExpenseDeletionInput {
   revision: number;
 }
@@ -111,6 +182,20 @@ export interface HealthStatus {
   status: string;
 }
 
+export type ItineraryGenerationErrorCode = typeof ItineraryGenerationErrorCode[keyof typeof ItineraryGenerationErrorCode];
+
+
+export const ItineraryGenerationErrorCode = {
+  INVALID_ITINERARY_RESPONSE: 'INVALID_ITINERARY_RESPONSE',
+  ITINERARY_TIMEOUT: 'ITINERARY_TIMEOUT',
+} as const;
+
+export interface ItineraryGenerationError {
+  error: string;
+  code: ItineraryGenerationErrorCode;
+  recoverable: boolean;
+}
+
 export interface ErrorResponse {
   error: string;
 }
@@ -152,7 +237,9 @@ export interface Activity {
   tag: string;
   fromWish: boolean;
   suggester: string;
-  estimatedCost: number;
+  /** @nullable */
+  estimatedCost: number | null;
+  pricing?: ActivityPricing;
   labels: string[];
   nearPrevious: boolean;
   /** @nullable */

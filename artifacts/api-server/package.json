@@ -8,11 +8,12 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/lib/verification-email.test.ts src/lib/itinerary-parser.test.ts src/lib/firebase-lists.test.ts src/lib/expenses.test.ts scripts/mobile-trip-features.test.ts"
+    "test": "tsx --test src/lib/verification-email.test.ts src/lib/itinerary-parser.test.ts src/lib/firebase-lists.test.ts src/lib/expenses.test.ts src/lib/activity-prices.test.ts scripts/mobile-trip-features.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.104.2",
     "@paddle/paddle-node-sdk": "^3.8.0",
+    "@workspace/activity-pricing": "workspace:*",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "cookie-parser": "^1.4.7",

@@ -65,6 +65,7 @@ export interface AccommodationSuggestion {
 }
 
 export interface Trip {
+  currency?: string;
   id: string;
   destination: string;
   days: number;
@@ -201,6 +202,7 @@ export interface Activity {
   suggester: string;
   matchedVibe?: string | null;
   estimatedCost: number;
+  pricing?: import("@workspace/activity-pricing").ActivityPricing | null;
   labels: string[];
   nearPrevious: boolean;
   lastRedoBy?: string;
@@ -214,7 +216,8 @@ export interface PublicItineraryActivity {
   name: string;
   category?: string;
   description?: string;
-  estimatedCost?: number;
+  estimatedCost?: number | null;
+  pricing?: import("@workspace/activity-pricing").ActivityPricing | null;
 }
 
 export interface PublicItineraryDay {
@@ -249,7 +252,8 @@ export interface SavedActivity {
   name: string;
   description: string;
   category: string;
-  estimatedCost?: number;
+  estimatedCost?: number | null;
+  pricing?: import("@workspace/activity-pricing").ActivityPricing | null;
   savedAt: number;
 }
 
@@ -290,6 +294,7 @@ function serializePublicActivity(a: any) {
     category: classifyActivity({ name: a?.name, description: a?.description, fallback: a?.category || a?.tag }),
     description: a?.description || "",
     ...(typeof a?.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
+    ...(a?.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
   };
 }
 
@@ -710,6 +715,7 @@ function normalizePublicItineraryDays(days: any): PublicItineraryDay[] | null {
           }),
           description: activity?.description ?? "",
           estimatedCost: typeof activity?.estimatedCost === "number" ? activity.estimatedCost : undefined,
+          ...(activity?.pricing && typeof activity.pricing === "object" ? { pricing: activity.pricing } : {}),
         }))
       : [],
   }));
@@ -878,6 +884,7 @@ function normalizeSavedActivity(id: string, v: any): SavedActivity {
     description: String(v?.description ?? ""),
     category: classifyActivity({ name: v?.name, description: v?.description, fallback: v?.category }),
     ...(typeof v?.estimatedCost === "number" ? { estimatedCost: v.estimatedCost } : {}),
+    ...(v?.pricing && typeof v.pricing === "object" ? { pricing: v.pricing } : {}),
     savedAt: Number(v?.savedAt ?? 0),
   };
 }
@@ -961,6 +968,7 @@ export async function saveActivity(
     description: activity.description || "",
     category: classifyActivity({ name: activity.name, description: activity.description, fallback: activity.category }),
     ...(typeof activity.estimatedCost === "number" ? { estimatedCost: activity.estimatedCost } : {}),
+    ...(activity.pricing ? { pricing: activity.pricing } : {}),
     savedAt: Date.now(),
   });
   return key;
@@ -1936,6 +1944,7 @@ export async function addActivity(
     suggester: activity.suggester ?? "Member",
     matchedVibe: activity.matchedVibe ?? null,
     estimatedCost: activity.estimatedCost ?? 0,
+    ...(activity.pricing ? { pricing: activity.pricing } : {}),
     labels: activity.labels ?? [],
     nearPrevious: activity.nearPrevious ?? false,
     photoQuery: activity.photoQuery,

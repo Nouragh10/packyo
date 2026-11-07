@@ -1,0 +1,11 @@
+import { readFileSync } from "node:fs";
+import { connectBrowser, pause } from "./cdp.mjs";
+const b = await connectBrowser();
+const fixture = JSON.parse(readFileSync("generated-artifacts/walkthrough/fixtures.json", "utf8"));
+const route = (process.argv[2] ?? "/").replaceAll(":trip", fixture.tripId).replaceAll(":planning", fixture.planningId).replaceAll(":review", fixture.reviewId).replaceAll(":past", fixture.pastId);
+await b.go(`https://${process.env.REPLIT_EXPO_DEV_DOMAIN}${route}`);
+await pause(2300);
+console.log((await b.text()).slice(0, 13000));
+console.log("CONTROLS:", await b.evaluate(`JSON.stringify([...document.querySelectorAll('button,[role="button"],input,textarea')].map(e=>({tag:e.tagName,role:e.getAttribute('role'),text:e.innerText?.slice(0,110),aria:e.getAttribute('aria-label'),placeholder:e.placeholder})))`));
+await b.screenshot(process.cwd() + "/generated-artifacts/walkthrough/inspect.jpg");
+b.close();

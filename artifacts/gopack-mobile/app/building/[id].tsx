@@ -115,7 +115,7 @@ export default function BuildingScreen() {
             userId: user?.uid,
             isPlusUser: false,
           }),
-        });
+        }, 180_000);
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({})) as { error?: string };
@@ -130,12 +130,14 @@ export default function BuildingScreen() {
         }).start();
 
         await saveItinerary(id!, result);
-        await sendTripPush(
+        // A notification failure must never turn an already saved itinerary
+        // into a generation error or hold navigation behind a second request.
+        void sendTripPush(
           id!,
           `${trip.destination || "Your trip"} itinerary is ready`,
           "The pack's plan is ready to explore.",
           `/itinerary/${id}`,
-        );
+        ).catch(() => console.warn("Itinerary saved, but its notification could not be sent."));
         setTimeout(() => router.replace(`/itinerary/${id}`), 800);
       } catch (err) {
         setError((err as Error).message || "Something went wrong. Please try again.");

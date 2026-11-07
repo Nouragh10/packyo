@@ -51,3 +51,4 @@ Thumbs.db
 .env*
 gopack.now-clone-2/
 attached_assets/
+/generated-artifacts/

@@ -20,11 +20,14 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ActivityPriceCheckInput,
+  ActivityPriceCheckResult,
   ErrorResponse,
   ExpenseDeletionInput,
   ExpenseInput,
   ExpenseLedger,
   HealthStatus,
+  ItineraryGenerationError,
   ItineraryInput,
   ItineraryResult,
   PackingInput,
@@ -131,7 +134,7 @@ export const getGenerateItineraryUrl = () => {
 }
 
 /**
- * Uses Claude to generate a day-by-day itinerary based on trip details and wishes
+ * Uses Claude to generate a complete day-by-day itinerary. Native clients should allow 180 seconds; generation and repairs share a 150-second server budget.
  * @summary Generate AI trip itinerary
  */
 export const generateItinerary = async (itineraryInput: ItineraryInput, options?: RequestInit): Promise<ItineraryResult> => {
@@ -149,7 +152,7 @@ export const generateItinerary = async (itineraryInput: ItineraryInput, options?
 
 
 
-export const getGenerateItineraryMutationOptions = <TError = ErrorType<ErrorResponse>,
+export const getGenerateItineraryMutationOptions = <TError = ErrorType<ErrorResponse | ItineraryGenerationError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateItinerary>>, TError,{data: BodyType<ItineraryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof generateItinerary>>, TError,{data: BodyType<ItineraryInput>}, TContext> => {
 
@@ -178,12 +181,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type GenerateItineraryMutationResult = NonNullable<Awaited<ReturnType<typeof generateItinerary>>>
     export type GenerateItineraryMutationBody = BodyType<ItineraryInput>
-    export type GenerateItineraryMutationError = ErrorType<ErrorResponse>
+    export type GenerateItineraryMutationError = ErrorType<ErrorResponse | ItineraryGenerationError>
 
     /**
  * @summary Generate AI trip itinerary
  */
-export const useGenerateItinerary = <TError = ErrorType<ErrorResponse>,
+export const useGenerateItinerary = <TError = ErrorType<ErrorResponse | ItineraryGenerationError>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateItinerary>>, TError,{data: BodyType<ItineraryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof generateItinerary>>,
@@ -192,6 +195,150 @@ export const useGenerateItinerary = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getGenerateItineraryMutationOptions(options));
+    }
+
+export const getVerifyTripActivityPricesUrl = (tripId: string,) => {
+
+
+
+
+  return `/api/trips/${tripId}/activity-prices`
+}
+
+/**
+ * @summary Verify source-listed activity prices for a current trip member
+ */
+export const verifyTripActivityPrices = async (tripId: string,
+    activityPriceCheckInput?: ActivityPriceCheckInput, options?: RequestInit): Promise<ActivityPriceCheckResult> => {
+
+  return customFetch<ActivityPriceCheckResult>(getVerifyTripActivityPricesUrl(tripId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      activityPriceCheckInput,)
+  }
+);}
+
+
+
+
+export const getVerifyTripActivityPricesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyTripActivityPrices>>, TError,{tripId: string;data?: BodyType<ActivityPriceCheckInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyTripActivityPrices>>, TError,{tripId: string;data?: BodyType<ActivityPriceCheckInput>}, TContext> => {
+
+const mutationKey = ['verifyTripActivityPrices'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyTripActivityPrices>>, {tripId: string;data?: BodyType<ActivityPriceCheckInput>}> = (props) => {
+          const {tripId,data} = props ?? {};
+
+          return  verifyTripActivityPrices(tripId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyTripActivityPricesMutationResult = NonNullable<Awaited<ReturnType<typeof verifyTripActivityPrices>>>
+    export type VerifyTripActivityPricesMutationBody = BodyType<ActivityPriceCheckInput> | undefined
+    export type VerifyTripActivityPricesMutationError = ErrorType<void>
+
+    /**
+ * @summary Verify source-listed activity prices for a current trip member
+ */
+export const useVerifyTripActivityPrices = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyTripActivityPrices>>, TError,{tripId: string;data?: BodyType<ActivityPriceCheckInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyTripActivityPrices>>,
+        TError,
+        {tripId: string;data?: BodyType<ActivityPriceCheckInput>},
+        TContext
+      > => {
+      return useMutation(getVerifyTripActivityPricesMutationOptions(options));
+    }
+
+export const getVerifyReviewActivityPricesUrl = (reviewId: string,) => {
+
+
+
+
+  return `/api/reviews/${reviewId}/activity-prices`
+}
+
+/**
+ * @summary Verify public Discover itinerary prices without accessing private trips
+ */
+export const verifyReviewActivityPrices = async (reviewId: string,
+    activityPriceCheckInput?: ActivityPriceCheckInput, options?: RequestInit): Promise<ActivityPriceCheckResult> => {
+
+  return customFetch<ActivityPriceCheckResult>(getVerifyReviewActivityPricesUrl(reviewId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      activityPriceCheckInput,)
+  }
+);}
+
+
+
+
+export const getVerifyReviewActivityPricesMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyReviewActivityPrices>>, TError,{reviewId: string;data?: BodyType<ActivityPriceCheckInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyReviewActivityPrices>>, TError,{reviewId: string;data?: BodyType<ActivityPriceCheckInput>}, TContext> => {
+
+const mutationKey = ['verifyReviewActivityPrices'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyReviewActivityPrices>>, {reviewId: string;data?: BodyType<ActivityPriceCheckInput>}> = (props) => {
+          const {reviewId,data} = props ?? {};
+
+          return  verifyReviewActivityPrices(reviewId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyReviewActivityPricesMutationResult = NonNullable<Awaited<ReturnType<typeof verifyReviewActivityPrices>>>
+    export type VerifyReviewActivityPricesMutationBody = BodyType<ActivityPriceCheckInput> | undefined
+    export type VerifyReviewActivityPricesMutationError = ErrorType<void>
+
+    /**
+ * @summary Verify public Discover itinerary prices without accessing private trips
+ */
+export const useVerifyReviewActivityPrices = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyReviewActivityPrices>>, TError,{reviewId: string;data?: BodyType<ActivityPriceCheckInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyReviewActivityPrices>>,
+        TError,
+        {reviewId: string;data?: BodyType<ActivityPriceCheckInput>},
+        TContext
+      > => {
+      return useMutation(getVerifyReviewActivityPricesMutationOptions(options));
     }
 
 export const getGeneratePackingListUrl = () => {

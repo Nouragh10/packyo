@@ -442,7 +442,7 @@ export default function DiscoverItineraryPreviewScreen() {
               </View>
               {stay.totalCost > 0 && stay.nights > 0 ? (
                 <Text style={[styles.stayMeta, { color: colors.mutedForeground }]}>
-                  Past-trip price: about ${Math.round(stay.totalCost / stay.nights)}/night. Prices will be re-estimated for your dates and group.
+                  Past-trip stay price not shown because its currency was not recorded. Check current rates for your dates.
                 </Text>
               ) : null}
               <Pressable

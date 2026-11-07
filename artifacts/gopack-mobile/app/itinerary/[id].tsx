@@ -51,6 +51,7 @@ import { Mascot } from "@/components/Mascot";
 import { WikiImage } from "@/components/WikiImage";
 import { TripExpenses } from "@/components/TripExpenses";
 import { TripOverview } from "@/components/TripOverview";
+import { activityTimeLabel } from "@/lib/activity-time";
 
 const MEMBER_COLORS = ["#F15A3A", "#F4BC55", "#A77BD6", "#68B7A0", "#EE9D54", "#6EA6D8"];
 
@@ -224,514 +225,6 @@ interface AccomSummary {
   type?: string;
 }
 
-function buildItineraryHTML(
-  title: string,
-  destination: string,
-  days: ItineraryDay[],
-  members: TripMember[],
-  budget: string,
-  startDate: string | null | undefined,
-  totalCost: number,
-  vibes: string[],
-  accom?: AccomSummary | null,
-): string {
-  const totalActivities = days.reduce((s, d) => s + d.activities.length, 0);
-  const generatedDate = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-
-  const memberAvatars = members
-    .map(
-      (m, i) => `
-      <div class="avatar" style="background:${MEMBER_COLORS[i % MEMBER_COLORS.length]}">
-        ${m.name[0].toUpperCase()}
-      </div>`,
-    )
-    .join("");
-
-  const memberNames = members.map(m => m.name).join("  ·  ");
-
-  const vibePills = vibes.map(v => `<span class="vibe-pill">${v}</span>`).join("");
-
-  const daysHtml = days
-    .map((day) => {
-      const tagEmoji: Record<string, string> = {
-        food:"🍽", dining:"🍽", culture:"🏛", museum:"🏛", art:"🎨",
-        adventure:"🧗", outdoor:"🌿", nature:"🌊", transport:"🚌",
-        accommodation:"🏠", hotel:"🏠", relax:"🧘", wellness:"🧘",
-        nightlife:"🌙", shopping:"🛍", beach:"🏖",
-      };
-
-      const activitiesHtml = day.activities
-        .map(
-          (act, idx) => {
-            const tagColor = getTagColor(act.tag);
-            const emoji = tagEmoji[act.tag?.toLowerCase() ?? ""] ?? "✦";
-            const isWish = act.fromWish;
-            const isManual = !act.fromWish && act.suggester && act.suggester !== "AI pick";
-            const attributionText = isWish
-              ? `★ ${act.suggester}'s wish`
-              : isManual
-              ? `+ Added by ${act.suggester}`
-              : act.matchedVibe
-              ? `✦ ${act.matchedVibe}`
-              : `✦ AI pick`;
-            const attrColor = isWish ? "#D97706" : isManual ? "#26A69A" : "#A8A298";
-            const attrBg  = isWish ? "#FFFBEB" : isManual ? "#F0FAF9" : "#F4F1EC";
-            const isLast  = idx === day.activities.length - 1;
-
-            return `
-          <div class="tl-item">
-            <div class="tl-left">
-              <div class="tl-dot" style="background:${tagColor}">${emoji}</div>
-              ${!isLast ? `<div class="tl-line"></div>` : ""}
-            </div>
-            <div class="tl-card ${isWish ? "tl-card-wish" : ""}">
-              <div class="tl-card-top">
-                <span class="tl-time">${act.time}</span>
-                <span class="tl-attr" style="color:${attrColor};background:${attrBg}">${attributionText}</span>
-              </div>
-              <div class="tl-name">${act.name}</div>
-              <div class="tl-desc">${act.description}</div>
-              <div class="tl-cost" style="${act.estimatedCost === 0 ? "color:#26A69A" : ""}">
-                ${act.estimatedCost === 0 ? "No entry fee ✓" : `≈ $${act.estimatedCost} <span style="font-weight:400;opacity:.65">/ person</span>`}
-              </div>
-            </div>
-          </div>`;
-          }
-        )
-        .join("");
-
-      const dayCost = day.activities.reduce((s, a) => s + (a.estimatedCost ?? 0), 0);
-
-      return `
-        <div class="day-block">
-          <div class="day-header">
-            <div class="day-number">Day ${day.dayNumber}</div>
-            <div class="day-info">
-              <div class="day-city">${day.city}</div>
-              <div class="day-theme">${day.theme}</div>
-            </div>
-            ${dayCost > 0 ? `<div class="day-cost">≈ $${dayCost}<span class="day-cost-label">/person</span></div>` : ""}
-          </div>
-          <div class="timeline">
-            ${activitiesHtml}
-          </div>
-        </div>`;
-    })
-    .join("");
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
-
-*{box-sizing:border-box;margin:0;padding:0}
-
-body{
-  font-family:'Inter',system-ui,-apple-system,sans-serif;
-  background:#F8F5F0;
-  color:#1A1714;
-  font-size:13px;
-  line-height:1.5;
-  -webkit-font-smoothing:antialiased;
-}
-
-@media print{
-  @page{size:A4;margin:0}
-  body{-webkit-print-color-adjust:exact;print-color-adjust:exact;background:#F8F5F0}
-  .cover{min-height:297mm;page-break-after:always}
-  .day-block{page-break-inside:avoid}
-  .act{page-break-inside:avoid}
-}
-
-/* ─── COVER ─────────────────────────────────────── */
-.cover{
-  background:linear-gradient(145deg,#111009 0%,#1E1A15 60%,#2A2118 100%);
-  min-height:100vh;
-  padding:0;
-  display:flex;
-  flex-direction:column;
-  position:relative;
-  overflow:hidden;
-}
-.cover-glow{
-  position:absolute;top:-120px;right:-120px;
-  width:500px;height:500px;
-  background:radial-gradient(circle,rgba(232,93,58,.18) 0%,transparent 70%);
-  pointer-events:none;
-}
-.cover-glow2{
-  position:absolute;bottom:-80px;left:-80px;
-  width:350px;height:350px;
-  background:radial-gradient(circle,rgba(232,93,58,.1) 0%,transparent 70%);
-  pointer-events:none;
-}
-.cover-lines{
-  position:absolute;inset:0;
-  background-image:repeating-linear-gradient(0deg,transparent,transparent 59px,rgba(255,255,255,.025) 59px,rgba(255,255,255,.025) 60px);
-  pointer-events:none;
-}
-.cover-top{
-  padding:40px 52px 0;
-  display:flex;align-items:center;justify-content:space-between;
-}
-.logo{
-  display:flex;align-items:center;gap:10px;
-}
-.logo-mark{
-  width:32px;height:32px;
-  background:#F15A3A;
-  border-radius:8px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:16px;
-}
-.logo-name{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:18px;font-weight:700;
-  color:#FFFDF9;letter-spacing:.5px;
-}
-.cover-badge{
-  font-size:10px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;
-  color:#F15A3A;
-  border:1px solid rgba(232,93,58,.4);
-  padding:6px 14px;border-radius:20px;
-}
-.cover-body{
-  flex:1;
-  padding:60px 52px 0;
-  display:flex;flex-direction:column;justify-content:flex-end;
-}
-.cover-eyebrow{
-  font-size:11px;font-weight:600;letter-spacing:3px;text-transform:uppercase;
-  color:#756C66;margin-bottom:18px;
-}
-.cover-title{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:56px;font-weight:900;line-height:1.05;
-  color:#FFFDF9;margin-bottom:16px;letter-spacing:-.5px;
-}
-.cover-dest{
-  font-size:18px;font-weight:500;color:#A39A93;margin-bottom:64px;
-  display:flex;align-items:center;gap:10px;
-}
-.cover-dest-dot{width:6px;height:6px;border-radius:50%;background:#F15A3A;flex-shrink:0}
-.cover-rule{height:1px;background:linear-gradient(90deg,rgba(232,93,58,.6),rgba(232,93,58,.1),transparent)}
-.cover-stats{
-  display:grid;grid-template-columns:repeat(4,1fr);
-  padding:32px 52px;gap:0;
-}
-.stat{padding-right:28px;position:relative}
-.stat+.stat{padding-left:28px;padding-right:28px}
-.stat+.stat::before{
-  content:"";position:absolute;left:0;top:8px;bottom:8px;
-  width:1px;background:rgba(255,255,255,.08);
-}
-.stat-label{
-  font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;
-  color:#756C66;margin-bottom:8px;
-}
-.stat-val{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:24px;font-weight:700;color:#FFFDF9;line-height:1.1;
-}
-.stat-sub{font-size:11px;color:#4A4440;margin-top:4px;font-weight:500}
-
-/* ─── MEMBERS STRIP ─────────────────────────────── */
-.members-strip{
-  background:#FFFDF9;
-  padding:32px 52px;
-  display:flex;align-items:center;gap:24px;
-  border-bottom:1px solid #E8E2D9;
-}
-.avatars{display:flex;align-items:center}
-.avatar{
-  width:40px;height:40px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-weight:700;font-size:14px;color:#fff;
-  border:2.5px solid #FFFDF9;
-  margin-left:-10px;
-}
-.avatar:first-child{margin-left:0}
-.members-info{flex:1}
-.members-title{font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#B8B0A8;margin-bottom:4px}
-.members-names{font-size:14px;font-weight:600;color:#1A1714}
-
-/* ─── VIBES ─────────────────────────────────────── */
-.vibes-strip{
-  background:#FFFDF9;padding:20px 52px;
-  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-  border-bottom:1px solid #E8E2D9;
-}
-.vibes-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#B8B0A8;white-space:nowrap;margin-right:4px}
-.vibe-pill{
-  display:inline-block;
-  background:linear-gradient(135deg,#FFF8F5,#FFF0EB);
-  border:1px solid rgba(232,93,58,.25);
-  border-radius:20px;padding:5px 14px;
-  font-size:12px;font-weight:600;color:#F15A3A;text-transform:capitalize;
-}
-
-/* ─── ACCOMMODATION ─────────────────────────────── */
-.accom-section{
-  background:#FFFDF9;padding:28px 52px;border-bottom:1px solid #E8E2D9;
-}
-.section-label{font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#B8B0A8;margin-bottom:16px}
-.accom-card{
-  background:linear-gradient(135deg,#F0FAF9,#E8F6F4);
-  border:1.5px solid rgba(38,166,154,.3);border-radius:16px;
-  padding:20px 24px;display:flex;align-items:center;gap:18px;
-}
-.accom-icon{
-  width:48px;height:48px;border-radius:12px;
-  background:#26A69A;display:flex;align-items:center;justify-content:center;
-  font-size:22px;flex-shrink:0;
-}
-.accom-name{font-family:'Playfair Display',Georgia,serif;font-size:18px;font-weight:700;color:#0E0D0B;margin-bottom:3px}
-.accom-meta{font-size:12px;color:#4A4440;text-transform:capitalize}
-.accom-cost{font-size:13px;font-weight:700;color:#26A69A;margin-top:6px}
-
-/* ─── DAYS ──────────────────────────────────────── */
-.day-block{
-  background:#FFFDF9;
-  margin-top:2px;
-  padding:40px 52px 32px;
-  border-bottom:2px solid #F0EBE3;
-}
-.day-header{
-  display:flex;align-items:flex-end;gap:20px;margin-bottom:30px;
-  padding-bottom:22px;
-  border-bottom:1px solid #EDE8DE;
-  position:relative;
-}
-.day-header::after{
-  content:"";position:absolute;bottom:-1px;left:0;
-  width:72px;height:3px;border-radius:2px;background:#F15A3A;
-}
-.day-number{
-  font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;
-  color:#F15A3A;padding-bottom:6px;white-space:nowrap;min-width:40px;
-}
-.day-info{flex:1}
-.day-city{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:30px;font-weight:700;color:#1A1714;line-height:1.08;margin-bottom:5px;
-  letter-spacing:-.3px;
-}
-.day-theme{font-size:13px;color:#8C8480;font-style:italic}
-.day-cost{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:23px;font-weight:700;color:#1A1714;
-  text-align:right;white-space:nowrap;
-}
-.day-cost-label{font-size:11px;font-weight:500;color:#8C8480;font-family:'Inter',sans-serif}
-
-/* ─── TIMELINE ──────────────────────────────────── */
-.timeline{display:flex;flex-direction:column;padding-left:0}
-.tl-item{display:flex;align-items:stretch;gap:16px;min-height:0}
-.tl-left{
-  display:flex;flex-direction:column;align-items:center;
-  width:40px;flex-shrink:0;
-}
-.tl-dot{
-  width:38px;height:38px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:17px;flex-shrink:0;
-  box-shadow:0 2px 8px rgba(0,0,0,.13);
-}
-.tl-line{
-  flex:1;width:2px;background:linear-gradient(to bottom,rgba(0,0,0,.08),rgba(0,0,0,.04));
-  margin:4px 0 4px;border-radius:1px;
-}
-.tl-card{
-  flex:1;
-  background:#FEFCF8;
-  border:1px solid #EDE8DE;
-  border-radius:14px;
-  padding:15px 18px 13px;
-  margin-bottom:14px;
-  box-shadow:0 1px 4px rgba(26,23,20,.05),0 4px 12px rgba(26,23,20,.03);
-}
-.tl-card-wish{
-  border-color:rgba(217,119,6,.3);
-  background:linear-gradient(135deg,#FFFBEB,#FFF8EE);
-  box-shadow:0 1px 4px rgba(217,119,6,.08),0 4px 12px rgba(217,119,6,.04);
-}
-.tl-card-top{display:flex;align-items:center;gap:10px;margin-bottom:7px;flex-wrap:wrap}
-.tl-time{
-  font-size:11px;font-weight:700;color:#A8A298;letter-spacing:.8px;
-  text-transform:uppercase;white-space:nowrap;min-width:58px;
-}
-.tl-attr{
-  font-size:10px;font-weight:600;letter-spacing:.2px;
-  padding:3px 9px;border-radius:9px;
-}
-.tl-name{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:17px;font-weight:700;color:#1A1714;
-  margin-bottom:5px;line-height:1.28;letter-spacing:-.1px;
-}
-.tl-desc{font-size:12.5px;color:#5A534D;line-height:1.68;margin-bottom:10px}
-.tl-cost{
-  font-size:12px;font-weight:700;color:#1A1714;
-  padding-top:8px;border-top:1px solid rgba(26,23,20,.06);
-}
-
-/* ─── TOTALS ─────────────────────────────────────── */
-.totals-section{
-  background:linear-gradient(145deg,#111009 0%,#1E1A15 100%);
-  padding:48px 52px;
-  display:flex;align-items:center;gap:32px;
-  position:relative;overflow:hidden;
-}
-.totals-glow{
-  position:absolute;right:-60px;top:-60px;
-  width:300px;height:300px;
-  background:radial-gradient(circle,rgba(232,93,58,.12) 0%,transparent 70%);
-}
-.totals-circle{
-  width:72px;height:72px;border-radius:50%;
-  background:linear-gradient(135deg,#F15A3A,#E6492D);
-  display:flex;align-items:center;justify-content:center;
-  font-size:30px;flex-shrink:0;
-  box-shadow:0 0 0 12px rgba(232,93,58,.1);
-}
-.totals-label{font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#756C66;margin-bottom:8px}
-.totals-val{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:48px;font-weight:900;color:#FFFDF9;line-height:1;margin-bottom:6px;
-}
-.totals-note{font-size:13px;color:#4A4440;font-weight:500}
-
-/* ─── FOOTER ─────────────────────────────────────── */
-.footer{
-  background:#0A0907;
-  padding:28px 52px;
-  display:flex;align-items:center;justify-content:space-between;
-}
-.footer-logo{
-  font-family:'Playfair Display',Georgia,serif;
-  font-size:18px;color:#FFFDF9;font-weight:700;
-  display:flex;align-items:center;gap:10px;
-}
-.footer-dot{width:8px;height:8px;border-radius:50%;background:#F15A3A}
-.footer-meta{font-size:11px;color:#4A4440;text-align:right;line-height:1.8}
-</style>
-</head>
-<body>
-
-<!-- COVER -->
-<div class="cover">
-  <div class="cover-glow"></div>
-  <div class="cover-glow2"></div>
-  <div class="cover-lines"></div>
-
-  <div class="cover-top">
-    <div class="logo">
-      <div class="logo-mark">🎒</div>
-      <div class="logo-name">Packyo</div>
-    </div>
-    <div class="cover-badge">Group Travel Itinerary</div>
-  </div>
-
-  <div class="cover-body">
-    <div class="cover-eyebrow">Your adventure awaits</div>
-    <h1 class="cover-title">${title}</h1>
-    <div class="cover-dest">
-      <div class="cover-dest-dot"></div>
-      ${destination}
-    </div>
-  </div>
-
-  <div class="cover-rule"></div>
-
-  <div class="cover-stats">
-    <div class="stat">
-      <div class="stat-label">Duration</div>
-      <div class="stat-val">${days.length}</div>
-      <div class="stat-sub">day${days.length !== 1 ? "s" : ""}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Experiences</div>
-      <div class="stat-val">${totalActivities}</div>
-      <div class="stat-sub">activities</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Budget</div>
-      <div class="stat-val" style="text-transform:capitalize;font-size:18px">${budget}</div>
-      <div class="stat-sub">level</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">Travellers</div>
-      <div class="stat-val">${members.length}</div>
-      <div class="stat-sub">in the pack</div>
-    </div>
-  </div>
-</div>
-
-<!-- MEMBERS -->
-<div class="members-strip">
-  <div class="avatars">${memberAvatars}</div>
-  <div class="members-info">
-    <div class="members-title">The Pack</div>
-    <div class="members-names">${memberNames}</div>
-  </div>
-  ${startDate ? `<div style="text-align:right"><div class="stat-label" style="color:#B8B0A8;font-size:9px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Departure</div><div style="font-size:15px;font-weight:700;color:#1A1714">${startDate}</div></div>` : ""}
-</div>
-
-${vibes.length > 0 ? `
-<div class="vibes-strip">
-  <div class="vibes-label">Trip vibes</div>
-  ${vibePills}
-</div>` : ""}
-
-${accom ? `
-<div class="accom-section">
-  <div class="section-label">Accommodation</div>
-  <div class="accom-card">
-    <div class="accom-icon">🏠</div>
-    <div>
-      <div class="accom-name">${accom.name}</div>
-      <div class="accom-meta">${accom.location}${accom.type ? ` · ${accom.type}` : ""}</div>
-      <div class="accom-cost">≈ $${accom.costPerPerson} per person · total stay</div>
-    </div>
-  </div>
-</div>` : ""}
-
-<!-- DAYS -->
-${daysHtml}
-
-<!-- TOTALS -->
-${
-  totalCost > 0
-    ? `<div class="totals-section">
-        <div class="totals-glow"></div>
-        <div class="totals-circle">💰</div>
-        <div>
-          <div class="totals-label">Estimated total · all ${days.length} days${accom ? " + accommodation" : ""}</div>
-          <div class="totals-val">~$${totalCost}</div>
-          <div class="totals-note">per person · ${totalActivities} activities planned</div>
-        </div>
-      </div>`
-    : ""
-}
-
-<!-- FOOTER -->
-<div class="footer">
-  <div class="footer-logo">
-    <div class="footer-dot"></div>
-    Packyo
-  </div>
-  <div class="footer-meta">
-    Generated on ${generatedDate}<br>
-    Plan trips together ✦
-  </div>
-</div>
-
-</body>
-</html>`;
-}
 
 function buildPremiumItineraryHTML(
   title: string,
@@ -779,7 +272,9 @@ function buildPremiumItineraryHTML(
       const tag = activity.tag?.trim() || "experience";
       const tagColor = getTagColor(tag);
       const activityNumber = String(index + 1).padStart(2, "0");
-      const cost = activity.estimatedCost > 0
+      const cost = typeof activity.estimatedCost !== "number" || !Number.isFinite(activity.estimatedCost)
+        ? "Estimate unavailable"
+        : activity.estimatedCost > 0
         ? `Estimated ${escapeHtml(`$${activity.estimatedCost}`)} per person`
         : "No entry fee";
       return `<article class="activity">
@@ -1005,7 +500,7 @@ function ActivityCard({
       style={({ pressed }) => [styles.actRow, { opacity: pressed ? 0.85 : 1 }]}
       onPress={onCardPress}
     >
-      <Text style={[styles.actTime, { color: colors.foreground }]}>{activity.time}</Text>
+      <Text style={[styles.actTime, { color: colors.foreground }]}>{activityTimeLabel(activity.time)}</Text>
       <View style={styles.actContent}>
         <View style={styles.actHeaderRow}>
           <Text style={[styles.actName, { color: colors.foreground }]}>{activity.name}</Text>
@@ -1159,7 +654,6 @@ export default function ItineraryScreen() {
 
   const accom = trip?.confirmedAccommodation ?? null;
   const accomCost = accom?.costPerPerson ?? 0;
-
   const totalCost =
     days.reduce((sum, day) => sum + day.activities.reduce((s, a) => s + (a.estimatedCost ?? 0), 0), 0) +
     accomCost;
@@ -1361,8 +855,8 @@ export default function ItineraryScreen() {
     shareInFlightRef.current = true;
     setSharing(true);
     const lines = [
-      `🗺 ${itinerary.title}`,
-      `📍 ${trip.destination} · ${trip.days} days`,
+      itinerary.title,
+      `${trip.destination} · ${trip.days} days`,
       "",
       ...days.flatMap((day) => [
         `── Day ${day.dayNumber}: ${day.city} ──`,
@@ -1372,7 +866,7 @@ export default function ItineraryScreen() {
         ),
         "",
       ]),
-      totalCost > 0 ? `💰 Estimated total: ~$${totalCost}/person` : "",
+      totalCost > 0 ? `Estimated total: ~$${totalCost}/person` : "",
       "Built with packyo ✦",
     ].filter(Boolean);
     try {
@@ -1777,7 +1271,7 @@ export default function ItineraryScreen() {
                         <View style={[styles.infoChip, { backgroundColor: colors.muted }]}>
                           <Feather name="dollar-sign" size={11} color={colors.mutedForeground} />
                           <Text style={[styles.infoChipText, { color: colors.mutedForeground }]}>
-                            {act.estimatedCost === 0 ? "No entry fee" : `~$${act.estimatedCost}`}
+                            {typeof act.estimatedCost !== "number" || !Number.isFinite(act.estimatedCost) ? "Estimate unavailable" : act.estimatedCost === 0 ? "No entry fee" : `~$${act.estimatedCost}`}
                           </Text>
                         </View>
                       ) : null}

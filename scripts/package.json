@@ -6,13 +6,15 @@
   "scripts": {
     "hello": "tsx ./src/hello.ts",
     "seed:revenuecat": "tsx ./src/seedRevenueCat.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "trips:week": "tsx ./src/weeklyTrips.ts"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsx": "catalog:"
   },
   "dependencies": {
-    "@replit/revenuecat-sdk": "^4.2.0"
+    "@replit/revenuecat-sdk": "^4.2.0",
+    "firebase-admin": "^14.1.0"
   }
 }

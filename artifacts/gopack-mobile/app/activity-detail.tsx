@@ -167,7 +167,7 @@ export default function ActivityDetailScreen() {
             <View style={[styles.chip, { backgroundColor: colors.muted, borderColor: colors.border }]}>
               <Feather name="dollar-sign" size={12} color={colors.foreground} />
               <Text style={[styles.chipText, { color: colors.foreground }]}>
-                {cost === 0 ? "No entry fee" : `~$${cost} / person`}
+                {!Number.isFinite(cost) ? "Estimate unavailable" : cost === 0 ? "No entry fee" : `~$${cost} / person`}
               </Text>
             </View>
             {matchedVibe ? (
@@ -232,7 +232,9 @@ export default function ActivityDetailScreen() {
             <Text style={[styles.tipTitle, { color: colors.foreground }]}>Packyo tip</Text>
           </View>
           <Text style={[styles.tipText, { color: colors.mutedForeground }]}>
-            {cost === 0
+            {!Number.isFinite(cost)
+              ? "Check the venue for its current per-person cost before you go."
+              : cost === 0
               ? `${name} has no entry fee — no booking needed. Just show up and enjoy!`
               : `Budget around $${cost} per person. Book in advance when possible to avoid waiting.`}
           </Text>
