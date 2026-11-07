@@ -21,6 +21,7 @@ import {
   updateProfile,
   User,
 } from "firebase/auth";
+import { apiFetch } from "./api-client";
 import {
   equalTo,
   get,
@@ -82,10 +83,31 @@ export const signUpWithEmail = async (
 ) => {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(cred.user, { displayName });
-  await sendEmailVerification(cred.user);
+  await sendVerificationEmail(cred.user);
   await firebaseSignOut(auth);
   return cred;
 };
+
+/**
+ * Sends the Packyo-branded confirmation email through our API (from hello@packyo.app).
+ * Falls back to Firebase's built-in email if the API can't send, so sign-up never stalls.
+ * Returns "recent" when one was already sent in the last minute.
+ */
+export async function sendVerificationEmail(user: User): Promise<"sent" | "recent"> {
+  try {
+    const res = await apiFetch("/api/auth/send-verification", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${await user.getIdToken(true)}`, "Content-Type": "application/json" },
+      body: "{}",
+    });
+    if (res.ok) return "sent";
+    if (res.status === 429) return "recent";
+  } catch {
+    // fall through to Firebase's own email
+  }
+  await sendEmailVerification(user);
+  return "sent";
+}
 
 export const signInGuest = () => signInAnonymously(auth);
 export const signOut = () => firebaseSignOut(auth);
