@@ -93,7 +93,10 @@ async function main() {
   const memberOf = new Map<string, number>();
   for (const t of Object.values(all)) for (const uid of Object.keys(t.members ?? {})) memberOf.set(uid, (memberOf.get(uid) ?? 0) + 1);
   const hostOf = new Set(Object.values(all).map((t) => (t as { hostMemberId?: string }).hostMemberId));
-  const provider = (u: UserRecord) => u.providerData[0]?.providerId ?? (u.email ? "password" : "anonymous");
+  // Native Apple sign-in goes through our server (custom token), so Firebase records no provider
+  // for it; those accounts are created with a uid starting "apple:".
+  const provider = (u: UserRecord) =>
+    u.uid.startsWith("apple:") ? "apple" : u.providerData[0]?.providerId ?? (u.email ? "password" : "anonymous");
   const emailUnverified = newUsers.filter((u) => provider(u) === "password" && !u.emailVerified);
   const signups = {
     total: newUsers.length,
@@ -126,7 +129,7 @@ async function main() {
   console.log(`${n} new trips (${report.window.totalTripsAllTime} all time)\n`);
   const su = report.signups;
   console.log("Sign-ups");
-  console.log(`  New accounts             ${su.total}   (${su.byMethod.map(([k, v]) => `${k.replace(".com", "")} ${v}`).join(", ") || "–"})`);
+  console.log(`  New accounts             ${su.total}   (${su.byMethod.map(([k, v]) => `${k.replace(".com", "").replace("password", "email")} ${v}`).join(", ") || "–"})`);
   console.log(`  Stuck on email verify    ${su.stuckOnEmailVerification}  ${pct(su.stuckOnEmailVerification, su.total)}`);
   console.log(`  Created a trip           ${su.createdATrip}  ${pct(su.createdATrip, su.total)}`);
   console.log(`  Joined a friend's trip   ${su.joinedSomeoneElsesTrip}  ${pct(su.joinedSomeoneElsesTrip, su.total)}`);
