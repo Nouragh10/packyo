@@ -8,6 +8,7 @@
 // FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY. Read-only.
 import { initializeApp, cert } from "firebase-admin/app";
 import { getDatabase } from "firebase-admin/database";
+import { getAuth, type UserRecord } from "firebase-admin/auth";
 
 type Trip = {
   destination?: string;
@@ -40,10 +41,11 @@ if (!clientEmail || !privateKey) {
   console.error("Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY (the API server's Firebase secrets) first.");
   process.exit(1);
 }
-const db = getDatabase(initializeApp({
+const app = initializeApp({
   credential: cert({ projectId: "gopacknow-83d54", clientEmail, privateKey }),
   databaseURL: "https://gopacknow-83d54-default-rtdb.firebaseio.com",
-}));
+});
+const db = getDatabase(app);
 
 const since = new Date(Date.now() - days * 86400000);
 const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : "–");
@@ -80,7 +82,30 @@ async function main() {
   const unlockedNewTrips = trips.filter(([id]) => unlocks[id]?.group || Object.keys(unlocks[id]?.members ?? {}).length).length;
   const revenue = groupUnlocks * PRICE.group + personalUnlocks * PRICE.personal;
 
+  // Sign-ups in the window, and how far each new user got
+  const newUsers: UserRecord[] = [];
+  let pageToken: string | undefined;
+  do {
+    const page = await getAuth(app).listUsers(1000, pageToken);
+    for (const u of page.users) if (new Date(u.metadata.creationTime) >= since) newUsers.push(u);
+    pageToken = page.pageToken;
+  } while (pageToken);
+  const memberOf = new Map<string, number>();
+  for (const t of Object.values(all)) for (const uid of Object.keys(t.members ?? {})) memberOf.set(uid, (memberOf.get(uid) ?? 0) + 1);
+  const hostOf = new Set(Object.values(all).map((t) => (t as { hostMemberId?: string }).hostMemberId));
+  const provider = (u: UserRecord) => u.providerData[0]?.providerId ?? (u.email ? "password" : "anonymous");
+  const emailUnverified = newUsers.filter((u) => provider(u) === "password" && !u.emailVerified);
+  const signups = {
+    total: newUsers.length,
+    byMethod: top(newUsers.map(provider), 10),
+    stuckOnEmailVerification: emailUnverified.length,
+    createdATrip: newUsers.filter((u) => hostOf.has(u.uid)).length,
+    joinedSomeoneElsesTrip: newUsers.filter((u) => !hostOf.has(u.uid) && memberOf.has(u.uid)).length,
+    noTripAtAll: newUsers.filter((u) => !memberOf.has(u.uid)).length,
+  };
+
   const report = {
+    signups,
     window: { days, since: since.toISOString().slice(0, 10), totalTripsAllTime: Object.keys(all).length },
     groups: {
       avgSize: n ? +(sizes.reduce((a, b) => a + b, 0) / n).toFixed(1) : 0,
@@ -99,6 +124,13 @@ async function main() {
   const f = report.funnel;
   console.log(`\nPackyo trips — last ${days} days (since ${report.window.since})`);
   console.log(`${n} new trips (${report.window.totalTripsAllTime} all time)\n`);
+  const su = report.signups;
+  console.log("Sign-ups");
+  console.log(`  New accounts             ${su.total}   (${su.byMethod.map(([k, v]) => `${k.replace(".com", "")} ${v}`).join(", ") || "–"})`);
+  console.log(`  Stuck on email verify    ${su.stuckOnEmailVerification}  ${pct(su.stuckOnEmailVerification, su.total)}`);
+  console.log(`  Created a trip           ${su.createdATrip}  ${pct(su.createdATrip, su.total)}`);
+  console.log(`  Joined a friend's trip   ${su.joinedSomeoneElsesTrip}  ${pct(su.joinedSomeoneElsesTrip, su.total)}`);
+  console.log(`  No trip at all           ${su.noTripAtAll}  ${pct(su.noTripAtAll, su.total)}\n`);
   console.log(`Groups      avg ${report.groups.avgSize} people · ${report.groups.solo} solo · largest ${report.groups.largest}`);
   console.log("\nFunnel");
   for (const [label, v] of [
