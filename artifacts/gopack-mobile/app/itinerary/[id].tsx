@@ -51,6 +51,8 @@ import { Mascot } from "@/components/Mascot";
 import { WikiImage } from "@/components/WikiImage";
 import { TripExpenses } from "@/components/TripExpenses";
 import { TripOverview } from "@/components/TripOverview";
+import { ItineraryPaywall } from "@/components/ItineraryPaywall";
+import { useItineraryAccess } from "@/hooks/useItineraryAccess";
 
 const MEMBER_COLORS = ["#F15A3A", "#F4BC55", "#A77BD6", "#68B7A0", "#EE9D54", "#6EA6D8"];
 
@@ -1078,6 +1080,7 @@ export default function ItineraryScreen() {
   const { user } = useAuth();
   const { trip, loading } = useTrip(id);
   const wishes = useWishes(id);
+  const unlock = useItineraryAccess(id, user);
 
   const [activeTab, setActiveTab] = useState<"overview" | "itinerary" | "expenses" | "info" | "map" | "packing">("overview");
   const [editModal, setEditModal] = useState<EditState | null>(null);
@@ -1154,6 +1157,9 @@ export default function ItineraryScreen() {
   const itinerary = trip?.itinerary;
   const selectedTripDays = resolveTripDays(trip?.startDate, trip?.endDate, trip?.days);
   const days = (itinerary?.days ?? []).slice(0, selectedTripDays);
+  // Pay-per-itinerary: Day 1 is a free teaser until the group or this member unlocks it.
+  const itineraryLocked = !unlock.access?.unlocked;
+  const visibleDays = itineraryLocked ? days.slice(0, 1) : days;
   const showEstimatedCosts = trip?.showEstimatedCosts !== false;
   const members = Object.values(trip?.members ?? {});
 
@@ -1695,6 +1701,8 @@ export default function ItineraryScreen() {
             style={styles.headerTab}
             onPress={() => {
               Haptics.selectionAsync();
+              // Exports include every day, so they come with the unlock.
+              if (itineraryLocked && days.length > 1) { setActiveTab("itinerary"); return; }
               setShowExportSheet(true);
             }}
           >
@@ -1723,7 +1731,7 @@ export default function ItineraryScreen() {
       )}
 
       {activeTab === "overview" && (
-        <TripOverview trip={trip} wishes={wishes} currentUid={user?.uid} onOpen={(t) => setActiveTab(t)} />
+        <TripOverview trip={itineraryLocked && trip.itinerary ? { ...trip, itinerary: { ...trip.itinerary, days: visibleDays } } : trip} wishes={wishes} currentUid={user?.uid} onOpen={(t) => setActiveTab(t)} />
       )}
 
       {activeTab === "expenses" && id && (
@@ -1800,7 +1808,7 @@ export default function ItineraryScreen() {
 
       {/* ── MAP TAB ── */}
       {activeTab === "map" && (() => {
-        const allActs = days.flatMap((d) => d.activities.map((a) => ({ name: a.name, city: d.city, lat: a.lat, lng: a.lng })));
+        const allActs = visibleDays.flatMap((d) => d.activities.map((a) => ({ name: a.name, city: d.city, lat: a.lat, lng: a.lng })));
         const locationText = (place: { name: string; city: string; lat?: number; lng?: number }) =>
           (place.lat && place.lng && place.lat !== 0) ? `${place.lat},${place.lng}` : `${place.name} ${place.city}`;
         const buildRouteUrl = () => {
@@ -1842,7 +1850,7 @@ export default function ItineraryScreen() {
             </Pressable>
 
             {/* Per-day stops */}
-            {days.map((day) => (
+            {visibleDays.map((day) => (
               <View key={day.dayNumber} style={[styles.mapDayCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={styles.mapDayHeader}>
                   <View style={[styles.mapDayBadge, { backgroundColor: colors.primary }]}>
@@ -1906,7 +1914,7 @@ export default function ItineraryScreen() {
           </Pressable>
         ) : null}
 
-        {days.map((day, dayIndex) => (
+        {visibleDays.map((day, dayIndex) => (
           <View key={day.dayNumber} style={styles.dayBlock}>
             <View style={styles.dayHeader}>
               <Text style={[styles.dayMeta, { color: colors.mutedForeground }]}>
@@ -1969,6 +1977,26 @@ export default function ItineraryScreen() {
               </Pressable>
             </View>
           </View>
+        ))}
+
+        {itineraryLocked && days.length > 1 && (unlock.access ? (
+          <ItineraryPaywall
+            lockedDays={days.slice(1).map((d) => ({
+              dayNumber: d.dayNumber,
+              city: d.city,
+              activityCount: d.activities.length,
+              dateLabel: getDayDateLabel(trip.startDate, d.dayNumber) || undefined,
+            }))}
+            totalDays={days.length}
+            memberCount={members.length}
+            prices={unlock.prices}
+            busy={unlock.busy}
+            error={unlock.error}
+            onUnlock={unlock.unlock}
+            onRestore={unlock.restore}
+          />
+        ) : (
+          <ActivityIndicator color={colors.primary} style={{ marginVertical: 24 }} />
         ))}
 
         {accom && (

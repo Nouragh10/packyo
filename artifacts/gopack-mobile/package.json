@@ -65,9 +65,10 @@
     "expo-crypto": "~15.0.9",
     "expo-device": "~8.0.9",
     "expo-file-system": "^19.0.24",
-    "expo-print": "^15.0.8",
     "expo-notifications": "~0.32.12",
+    "expo-print": "^15.0.8",
     "expo-sharing": "^14.0.8",
-    "firebase": "^12.15.0"
+    "firebase": "^12.15.0",
+    "react-native-purchases": "10.15.1"
   }
 }
