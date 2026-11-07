@@ -2,7 +2,7 @@
 
 Recorded from the actual Expo web-rendered mobile app using an isolated demo account. No app screens were recreated. Example accommodation amounts and expense entries are demo data, not live booking quotes.
 
-The captioned video is silent. The companion SRT contains the same chapter explanations.
+The captioned video is silent. The companion SRT contains the same chapter explanations. The walkthrough shows the original activity cost estimator, without the removed price-verification section.
 
 ## Files
 
@@ -21,43 +21,41 @@ The captioned video is silent. The companion SRT contains the same chapter expla
 - **0:00:32 — Vote on destinations:** Compare destination suggestions and vote as a group.
 - **0:00:37 — Discover real trip ideas:** Open a shared itinerary, see its rating, travellers and where the pack stayed.
 - **0:00:42 — Save a stay:** Save accommodation from a Discover itinerary to your profile.
-- **0:00:46 — Save an activity:** Activities have category labels. Save British Museum to reuse on another London trip.
+- **0:00:47 — Save an activity:** Save British Museum from the itinerary. No price-verification panel or extra price check is required.
 - **0:00:52 — Your travel profile:** Your profile brings together trips, wishes, saved stays, activities and memories.
-- **0:00:57 — Explicitly saved activities:** Only activities you choose to save belong here. Voting does not automatically save them.
-- **0:01:02 — Your saved stays:** Keep stays from Discover ready to reuse when planning the same destination.
-- **0:01:07 — Build the pack wishlist:** Each traveller adds wishes. Expand a member to view or add their activities.
+- **0:00:56 — Explicitly saved activities:** Only activities you choose to save belong here. Voting does not automatically save them.
+- **0:01:01 — Your saved stays:** Keep stays from Discover ready to reuse when planning the same destination.
+- **0:01:06 — Build the pack wishlist:** Each traveller adds wishes. Expand a member to view or add their activities.
 - **0:01:11 — Reuse a saved activity:** Saved activities for this destination can become normal, votable wishes.
 - **0:01:17 — Add the saved wish:** British Museum is added to the new trip's wishlist rather than being automatically copied.
 - **0:01:23 — Vote on wishes:** Swipe or use the love and skip controls. Track which members have finished voting.
-- **0:01:28 — Review wishlist results:** See the pack's activity preferences before building the itinerary.
-- **0:01:33 — Find somewhere to stay:** Add a listing, submit stay preferences or reuse a saved stay.
-- **0:01:38 — Accommodation preferences:** Collect budget, property type, rooms, location and amenities.
+- **0:01:27 — Review wishlist results:** See the pack's activity preferences before building the itinerary.
+- **0:01:32 — Find somewhere to stay:** Add a listing, submit stay preferences or reuse a saved stay.
+- **0:01:37 — Accommodation preferences:** Collect budget, property type, rooms, location and amenities.
 - **0:01:42 — Reuse a saved stay:** Open saved stays for the same destination and add one as a voting option.
-- **0:01:48 — Add a stay for the pack:** A saved stay becomes a normal accommodation suggestion, not an automatic booking.
-- **0:01:54 — Tied stays stay tied:** Both tied options display WINNER. Packyo only breaks the vote when the creator requests it.
-- **0:01:59 — Ask Packyo to break the tie:** The creator explicitly requests a choice between the tied winners.
-- **0:02:05 — One chosen stay:** After the requested tiebreak, Book this one appears for the selected stay. No booking is made.
+- **0:01:47 — Add a stay for the pack:** A saved stay becomes a normal accommodation suggestion, not an automatic booking.
+- **0:01:53 — Tied stays stay tied:** Both tied options display WINNER. Packyo only breaks the vote when the creator requests it.
+- **0:01:58 — Ask Packyo to break the tie:** The creator explicitly requests a choice between the tied winners.
+- **0:02:04 — One chosen stay:** After the requested tiebreak, Book this one appears for the selected stay. No booking is made.
 - **0:02:09 — Live AI itinerary generation:** This chapter starts a real itinerary request for the temporary one-day London trip.
-- **0:02:14 — The generated result:** The live request returns a new itinerary for this demo trip.
-- **0:02:19 — Your trip overview:** Destination, dates, budget, pack members and vibes appear before the day-by-day itinerary.
-- **0:02:24 — Wishes and upcoming activities:** See what is coming up and who suggested the wishes included in your plan.
-- **0:02:28 — The day-by-day itinerary:** Browse scheduled activities, categories and who suggested each wish.
-- **0:02:33 — Activity details:** Open an activity for its description, practical details and price status.
-- **0:02:38 — Edit your itinerary:** Open an activity to change its name, time, description or manually entered price.
-- **0:02:43 — Redo activity choices:** Request a replacement or a different part of an activity. Changes remain within the trip.
-- **0:02:49 — Add another activity:** Use the add-activity tools to extend the plan.
-- **0:02:54 — Price transparency:** Unverified prices say Price unavailable. Verify prices looks for source-backed amounts, not AI guesses.
-- **0:02:59 — Live price research:** Price checks run separately from itinerary generation. Unknown amounts remain unavailable.
-- **0:03:03 — Check sources before booking:** Verified entries show their source and check date; unavailable prices are excluded from totals.
-- **0:03:08 — Practical trip information:** Keep trip information together alongside your itinerary.
-- **0:03:13 — Map and directions:** See the day's stops and open directions in an external maps app.
-- **0:03:17 — The packing checklist:** Manage essentials and clothing. Check items off as you pack.
-- **0:03:22 — Shared expenses:** Track total spending, your balance, member balances and recent expenses.
-- **0:03:27 — Add and split an expense:** Choose who paid, who shares the cost, and equal or custom splits.
-- **0:03:31 — Settle up:** Record repayment between members. Packyo tracks the record; it does not transfer money.
-- **0:03:36 — Talk with your pack:** Keep planning conversations inside the trip.
-- **0:03:41 — Share and export:** Export options include PDF and calendar. Native iOS share sheets require the installed app.
-- **0:03:45 — Plan together with Packyo:** Actual app pages, real interactions and isolated demo data. No real bookings, payments or invitations were made.
+- **0:02:13 — The generated result:** The live request returns a new itinerary for this demo trip.
+- **0:02:18 — Your trip overview:** Destination, dates, budget, pack members and vibes appear before the day-by-day itinerary.
+- **0:02:23 — Wishes and upcoming activities:** See what is coming up and who suggested the wishes included in your plan.
+- **0:02:27 — The day-by-day itinerary:** Browse scheduled activities and categories without a verified-totals panel.
+- **0:02:32 — Activity details:** Open an activity to see its estimated per-person cost.
+- **0:02:37 — Edit your itinerary:** Edit the activity, time, description and original estimated cost.
+- **0:02:42 — Redo activity choices:** Request a replacement activity using the pack's preferences.
+- **0:02:46 — Add another activity:** Add an activity and its estimated cost to the plan.
+- **0:02:51 — Original activity estimates:** The original per-person estimator is back. Example amounts in this demo are illustrative, not booking quotes.
+- **0:02:56 — Practical trip information:** Browse activity information and original estimates alongside the itinerary.
+- **0:03:00 — Map and directions:** See the day's stops and open directions in an external maps app.
+- **0:03:05 — The packing checklist:** Manage essentials and clothing. Check items off as you pack.
+- **0:03:10 — Shared expenses:** Track total spending, your balance, member balances and recent expenses.
+- **0:03:15 — Add and split an expense:** Choose who paid, who shares the cost, and equal or custom splits.
+- **0:03:19 — Settle up:** Record repayment between members. Packyo tracks the record; it does not transfer money.
+- **0:03:24 — Talk with your pack:** Keep planning conversations inside the trip.
+- **0:03:29 — Share and export:** Export options include PDF and calendar. Native iOS share sheets require the installed app.
+- **0:03:33 — Plan together with Packyo:** Actual app pages, real interactions and isolated demo data. No real bookings, payments or invitations were made.
 
 ## Scope and limitations
 
@@ -74,6 +72,7 @@ Requires the managed API and Expo workflows, Chromium and FFmpeg. Run from the w
 1. Start headless Chromium on debugging port 9223 with a fresh temporary user-data directory.
 2. Run `pnpm --filter @workspace/api-server exec tsx scripts/walkthrough-fixtures.ts` to create an isolated demo pack and sign in the recording browser.
 3. Run `node scripts/walkthrough/record.mjs`.
+   To refresh estimator-related clips in an existing recording, run `node scripts/walkthrough/record.mjs --estimator-update` after fixture setup.
    Optionally create an empty reuse trip with the fixture script's `--prepare-extras` flag and record `node scripts/walkthrough/record.mjs --extras` for saved-item reuse, the AI tiebreak and a live generation. A separate signed-out Chromium on port 9224 supports `node scripts/walkthrough/record-public.mjs`.
 4. Run `node scripts/walkthrough/render.mjs`.
 5. Always run `pnpm --filter @workspace/api-server exec tsx scripts/walkthrough-fixtures.ts --cleanup`, then stop the recording browser.

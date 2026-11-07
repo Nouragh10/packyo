@@ -1,6 +1,6 @@
 ---
 name: AI venue verification needs live web search
-description: Live-source verification for venue facts and the user's source-backed activity pricing policy.
+description: Live venue verification and the user's decision to keep the original activity cost estimator.
 ---
 
 Asking an LLM to "double check" or "prefer well-known venues" in a prompt does not fix closed-venue or wrong-city hallucinations, no matter how strongly worded. The model has no way to know a venue's real current status — it can only guess from static training data, which is exactly what caused the bug in the first place.
@@ -11,8 +11,8 @@ Asking an LLM to "double check" or "prefer well-known venues" in a prompt does n
 
 ## Activity pricing policy
 
-Use source-backed activity prices, not model guesses, generic dollar ranges, or admission prices adjusted by the group's budget tier. An unverifiable price must remain unavailable, not become a zero/free activity. A source-listed price is not a guaranteed booking quote or a recorded shared expense.
+Keep the original activity cost estimator. Do not add the verified-totals section, a Verify prices button, or automatic source-backed price checks.
 
-**Why:** The user reported incorrect activity estimates and explicitly chose “Verify prices with sources.”
+**Why:** The user explicitly reversed the earlier source-backed pricing choice and repeated that they want the original estimator, without the “No verified totals yet” and “Verify prices” section shown in the walkthrough.
 
-**How to apply:** Preserve currency, source evidence and check date across saved activities, Discover snapshots and exports. Keep live pricing research separate from initial itinerary generation so a slow or rate-limited lookup cannot prevent opening a trip. Do not replace missing proof with model knowledge.
+**How to apply:** Keep per-person activity estimates from the itinerary generator, editable estimates, and estimated totals. Venue existence/location checks remain separate and should still use live evidence. Do not reintroduce price verification unless the user asks.

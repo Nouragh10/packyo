@@ -52,23 +52,6 @@ import { WikiImage } from "@/components/WikiImage";
 import { TripExpenses } from "@/components/TripExpenses";
 import { TripOverview } from "@/components/TripOverview";
 import { activityTimeLabel } from "@/lib/activity-time";
-import { activityPricePresentation, formatActivityMoney, summarizeActivityPrices, validPriceCurrency, type ActivityPricing } from "@workspace/activity-pricing";
-import { ActivityPrice, ActivityPriceSummary, VerifyPricesButton, activityPriceText, asPriced, formatCheckedDate } from "@/components/ActivityPrice";
-import { useActivityPrices } from "@/hooks/useActivityPrices";
-
-/** Accommodation money only shows when its currency is explicitly known. */
-function accomPriceLabel(accom: unknown): string | null {
-  const a = (accom ?? {}) as { costPerPerson?: unknown; currency?: unknown };
-  if (typeof a.costPerPerson !== "number" || !Number.isFinite(a.costPerPerson) || a.costPerPerson <= 0) return null;
-  if (!validPriceCurrency(a.currency)) return null;
-  return `${formatActivityMoney(a.costPerPerson, a.currency)} per person`;
-}
-
-function activityPriceSummaryText(activities: unknown[]): string {
-  const s = summarizeActivityPrices(activities.map(asPriced));
-  if (!s.totals.length) return "No verified prices yet";
-  return `${s.hasFromPrices ? "From " : ""}${s.totals.map((t) => t.label).join(" + ")}`;
-}
 
 const MEMBER_COLORS = ["#F15A3A", "#F4BC55", "#A77BD6", "#68B7A0", "#EE9D54", "#6EA6D8"];
 
@@ -250,7 +233,7 @@ function buildPremiumItineraryHTML(
   members: TripMember[],
   budget: string,
   startDate: string | null | undefined,
-  priceSummary: string,
+  totalCost: number,
   vibes: string[],
   accom?: AccomSummary | null,
 ): string {
@@ -284,16 +267,16 @@ function buildPremiumItineraryHTML(
   ).join("");
 
   const dayPages = days.map((day) => {
-    const dayCost = activityPriceSummaryText(day.activities);
+    const dayCost = day.activities.reduce((sum, activity) => sum + (activity.estimatedCost ?? 0), 0);
     const activities = day.activities.map((activity, index) => {
       const tag = activity.tag?.trim() || "experience";
       const tagColor = getTagColor(tag);
       const activityNumber = String(index + 1).padStart(2, "0");
-      const pp = activityPricePresentation(asPriced(activity));
-      const checked = formatCheckedDate(pp.checkedAt);
-      const cost = pp.verified
-        ? `${escapeHtml(pp.label)}<br><small>${escapeHtml(pp.sourceTitle ?? "Source")}${checked ? ` · checked ${escapeHtml(checked)}` : ""}</small><br><small>${escapeHtml(pp.note)}</small>${pp.sourceUrl ? `<br><small>${escapeHtml(pp.sourceUrl)}</small>` : ""}`
-        : escapeHtml(pp.label);
+      const cost = typeof activity.estimatedCost !== "number" || !Number.isFinite(activity.estimatedCost)
+        ? "Estimate unavailable"
+        : activity.estimatedCost > 0
+        ? `Estimated ${escapeHtml(`$${activity.estimatedCost}`)} per person`
+        : "No entry fee";
       return `<article class="activity">
         <div class="activity-index" style="border-color:${tagColor};color:${tagColor}">${activityNumber}</div>
         <div class="activity-main">
@@ -315,8 +298,8 @@ function buildPremiumItineraryHTML(
           <p class="day-theme">${escapeHtml(day.theme || "A day at your own pace")}</p>
         </div>
         <div class="day-total">
-          <span>Verified prices</span>
-          <strong>${escapeHtml(dayCost)}</strong>
+          <span>Planned spend</span>
+          <strong>${dayCost > 0 ? `~$${dayCost}` : "Flexible"}</strong>
         </div>
       </header>
       <div class="activity-list">${activities || `<p class="empty-day">Space left open for spontaneous discoveries.</p>`}</div>
@@ -418,8 +401,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, 
     </header>
     <div class="overview-block"><p class="overview-label">Travelling together</p><div class="travelers">${memberList}</div></div>
     <div class="overview-block"><p class="overview-label">The mood</p><div>${vibeList}</div></div>
-    ${accom ? `<div class="overview-block"><p class="overview-label">Home base</p><div class="stay-card"><div><p class="eyebrow">Accommodation</p><h3>${escapeHtml(accom.name)}</h3><p>${escapeHtml(accom.location)}${accom.type ? ` · ${escapeHtml(accom.type)}` : ""}</p></div>${accomPriceLabel(accom) ? `<div class="stay-price">${escapeHtml(accomPriceLabel(accom))}</div>` : ""}</div></div>` : ""}
-    <div class="overview-block"><p class="overview-label">At a glance</p><div class="summary-grid"><div class="summary-cell"><span>Trip budget</span><strong>${escapeHtml(budget)}</strong></div><div class="summary-cell"><span>Verified activities</span><strong>${escapeHtml(priceSummary)}</strong></div></div></div>
+    ${accom ? `<div class="overview-block"><p class="overview-label">Home base</p><div class="stay-card"><div><p class="eyebrow">Accommodation</p><h3>${escapeHtml(accom.name)}</h3><p>${escapeHtml(accom.location)}${accom.type ? ` · ${escapeHtml(accom.type)}` : ""}</p></div><div class="stay-price">~$${escapeHtml(accom.costPerPerson)}<br><small>per person</small></div></div></div>` : ""}
+    <div class="overview-block"><p class="overview-label">At a glance</p><div class="summary-grid"><div class="summary-cell"><span>Trip budget</span><strong>${escapeHtml(budget)}</strong></div><div class="summary-cell"><span>Estimated plan</span><strong>${totalCost > 0 ? `~$${totalCost}` : "Flexible"}</strong></div></div></div>
   </section>
   ${dayPages}
   <section class="closing">
@@ -547,7 +530,6 @@ function ActivityCard({
         <Text style={[styles.actDesc, { color: colors.mutedForeground }]} numberOfLines={2}>
           {activity.description}
         </Text>
-        <ActivityPrice activity={activity} testID={`activity-price-${dayNumber}-${actIndex}`} />
         <View style={styles.actActions}>
           <Pressable onPress={(e) => { e.stopPropagation?.(); onEdit(activity, actIndex, dayNumber); }}>
             <Text style={[styles.actionText, { color: colors.mutedForeground }]}>Edit</Text>
@@ -574,15 +556,6 @@ interface EditState {
   time: string;
   description: string;
   estimatedCost: string;
-  currency: string;
-  originalName: string;
-  originalPrice: string;
-}
-
-function initialPriceFields(act: Activity) {
-  const p = asPriced(act).pricing;
-  const priceStr = p?.status === "user_entered" && typeof p.amount === "number" ? String(p.amount) : "";
-  return { estimatedCost: priceStr, currency: p?.currency ?? "", originalName: act.name, originalPrice: priceStr };
 }
 
 interface MapImportState {
@@ -680,13 +653,10 @@ export default function ItineraryScreen() {
   const members = Object.values(trip?.members ?? {});
 
   const accom = trip?.confirmedAccommodation ?? null;
-  const allActivities = days.flatMap((d) => d.activities);
-  const priceSummary = activityPriceSummaryText(allActivities);
-  const tripCurrency = validPriceCurrency((trip as { currency?: unknown } | null | undefined)?.currency)
-    ? ((trip as { currency?: string }).currency as string)
-    : null;
-  const priceAutoKey = allActivities.length ? allActivities.map((a) => (a.name ?? "").trim().toLowerCase()).join("|") : null;
-  const prices = useActivityPrices("trip", id, priceAutoKey);
+  const accomCost = accom?.costPerPerson ?? 0;
+  const totalCost =
+    days.reduce((sum, day) => sum + day.activities.reduce((s, a) => s + (a.estimatedCost ?? 0), 0), 0) +
+    accomCost;
 
   const openGoogleMaps = async (appUrl: string, browserUrl: string) => {
     // comgooglemaps opens the installed Google Maps app. It is deliberately
@@ -710,7 +680,7 @@ export default function ItineraryScreen() {
       name: act.name,
       time: act.time,
       description: act.description,
-      ...initialPriceFields(act),
+      estimatedCost: act.estimatedCost > 0 ? String(act.estimatedCost) : "",
     });
   };
 
@@ -785,9 +755,6 @@ export default function ItineraryScreen() {
       time: "12:00 PM",
       description: "",
       estimatedCost: "",
-      currency: tripCurrency ?? "",
-      originalName: "",
-      originalPrice: "",
     });
   };
 
@@ -858,34 +825,8 @@ export default function ItineraryScreen() {
         name: editModal.name.trim(),
         time: editModal.time.trim(),
         description: editModal.description.trim(),
+        estimatedCost: parseFloat(editModal.estimatedCost) || 0,
       };
-      const priceText = editModal.estimatedCost.trim();
-      const target = editModal.targetActivity as (Activity & { pricing?: ActivityPricing | null }) | null;
-      const nameChanged = editModal.name.trim() !== editModal.originalName.trim();
-      const priceChanged = priceText !== editModal.originalPrice || editModal.currency !== (target?.pricing?.currency ?? "");
-      let pricing: ActivityPricing | null | undefined;
-      if (priceText) {
-        const amount = Number(priceText);
-        if (!Number.isFinite(amount) || amount < 0) {
-          Alert.alert("Check the price", "Enter a non-negative number, or leave it blank if unknown.");
-          setSaving(false);
-          return;
-        }
-        if (!validPriceCurrency(editModal.currency)) {
-          Alert.alert("Currency required", "Enter a 3-letter currency code like EUR or JPY.");
-          setSaving(false);
-          return;
-        }
-        pricing = nameChanged || priceChanged || !target?.pricing
-          ? { status: "user_entered", amount, currency: editModal.currency, checkedAt: new Date().toISOString(), activityName: editModal.name.trim(), note: "Entered by a trip member; not independently verified." }
-          : target.pricing;
-      } else {
-        // Unknown is allowed. Changing the name invalidates any prior source.
-        pricing = nameChanged || priceChanged || target?.pricing?.status === "user_entered" ? null : target?.pricing ?? null;
-      }
-      // Main agent: Activity.pricing / estimatedCost:number|null types pending in useFirebase.ts.
-      (partial as Record<string, unknown>).estimatedCost = null;
-      (partial as Record<string, unknown>).pricing = pricing ?? null;
       if (editModal.actIndex === null) {
         await addActivity(id, editModal.dayNumber, {
           ...partial,
@@ -921,11 +862,11 @@ export default function ItineraryScreen() {
         `── Day ${day.dayNumber}: ${day.city} ──`,
         day.theme,
         ...day.activities.map(
-          (a) => `${a.time}  ${a.name} - ${activityPriceText(a)}`,
+          (a) => `${a.time}  ${a.name}${a.estimatedCost > 0 ? ` (~$${a.estimatedCost})` : ""}`,
         ),
         "",
       ]),
-      `Verified activity prices: ${priceSummary}`,
+      totalCost > 0 ? `Estimated total: ~$${totalCost}/person` : "",
       "Built with packyo ✦",
     ].filter(Boolean);
     try {
@@ -1116,7 +1057,7 @@ export default function ItineraryScreen() {
         members,
         trip.budget ?? "midrange",
         trip.startDate,
-        priceSummary,
+        totalCost,
         trip.vibes ?? [],
         accom,
       );
@@ -1304,7 +1245,7 @@ export default function ItineraryScreen() {
                     pathname: "/activity-detail",
                     params: {
                       name: act.name, description: act.description, time: act.time,
-                      tag: act.tag, pricing: JSON.stringify(asPriced(act).pricing ?? null),
+                      tag: act.tag, estimatedCost: String(act.estimatedCost),
                       photoQuery: photoQ, fallbackIndex: String(currentFallbackIndex),
                       lat: String(act.lat ?? ""), lng: String(act.lng ?? ""),
                       city: day.city, fromWish: String(act.fromWish), suggester: act.suggester,
@@ -1327,7 +1268,12 @@ export default function ItineraryScreen() {
                     <Text style={[styles.infoCardDesc, { color: colors.mutedForeground }]} numberOfLines={3}>{act.description}</Text>
                     <View style={styles.infoCardFooter}>
                       {showEstimatedCosts ? (
-                        <ActivityPrice activity={act} compact />
+                        <View style={[styles.infoChip, { backgroundColor: colors.muted }]}>
+                          <Feather name="dollar-sign" size={11} color={colors.mutedForeground} />
+                          <Text style={[styles.infoChipText, { color: colors.mutedForeground }]}>
+                            {typeof act.estimatedCost !== "number" || !Number.isFinite(act.estimatedCost) ? "Estimate unavailable" : act.estimatedCost === 0 ? "No entry fee" : `~$${act.estimatedCost}`}
+                          </Text>
+                        </View>
                       ) : null}
                       {act.fromWish && (
                         <View style={[styles.infoChip, { backgroundColor: "#F59E0B15" }]}>
@@ -1439,12 +1385,6 @@ export default function ItineraryScreen() {
         <View style={styles.titleRow}>
           <Text style={[styles.titleDest, { color: colors.foreground }]}>{trip.destination}</Text>
         </View>
-        {days.length > 0 ? (
-          <View style={{ gap: 8, marginBottom: 16 }}>
-            <ActivityPriceSummary activities={allActivities} />
-            <VerifyPricesButton running={prices.running} error={prices.error} progress={prices.progress} onPress={prices.verifyNow} />
-          </View>
-        ) : null}
 
         {tripEnded && isMember ? (
           <Pressable
@@ -1488,7 +1428,7 @@ export default function ItineraryScreen() {
                         description: act.description,
                         time: act.time,
                         tag: act.tag,
-                        pricing: JSON.stringify(asPriced(act).pricing ?? null),
+                        estimatedCost: String(act.estimatedCost),
                         photoQuery: act.photoQuery ?? `${act.name} ${trip.destination}`,
                          fallbackIndex: String(
                            days.slice(0, dayIndex).reduce((total, priorDay) => total + priorDay.activities.length, 0) + i,
@@ -1800,21 +1740,12 @@ export default function ItineraryScreen() {
                 onChangeText={(t) => setEditModal((p) => p ? { ...p, description: t } : p)}
               />
 
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Price per person (optional, unverified)</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Est. cost ($)</Text>
               <TextInput
                 style={[styles.fieldInput, { backgroundColor: colors.muted, color: colors.foreground }]}
                 placeholderTextColor={colors.mutedForeground}
-                placeholder="Currency code, e.g. EUR"
-                autoCapitalize="characters"
-                maxLength={3}
-                value={editModal?.currency ?? ""}
-                onChangeText={(t) => setEditModal((p) => p ? { ...p, currency: t.toUpperCase().replace(/[^A-Z]/g, "") } : p)}
-              />
-              <TextInput
-                style={[styles.fieldInput, { backgroundColor: colors.muted, color: colors.foreground }]}
-                placeholderTextColor={colors.mutedForeground}
-                placeholder="Leave blank if unknown"
-                keyboardType="decimal-pad"
+                placeholder="0"
+                keyboardType="numeric"
                 value={editModal?.estimatedCost ?? ""}
                 onChangeText={(t) => setEditModal((p) => p ? { ...p, estimatedCost: t } : p)}
               />

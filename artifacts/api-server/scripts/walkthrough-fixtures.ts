@@ -56,11 +56,11 @@ try {
       [friend]: { name: "Maya Demo", joinedAt: date, isHost: false },
       [third]: { name: "Sam Demo", joinedAt: date, isHost: false },
     };
-    const unavailable = (name: string) => ({ status: "unavailable", amount: null, currency: null, checkedAt: date, activityName: name, note: "Price unavailable. Check the venue before booking." });
     const activity = (name: string, time: string, tag: string, description: string, suggester: string, lat: number, lng: number) => ({
       id: name.toLowerCase().replace(/\W+/g, "-"), name, time, tag, description, suggester,
-      fromWish: true, labels: [tag], nearPrevious: false, estimatedCost: null,
-      pricing: unavailable(name), lat, lng, photoQuery: `${name} London`,
+      fromWish: true, labels: [tag], nearPrevious: false,
+      estimatedCost: name === "Borough Market" ? 20 : name === "Tower of London" ? 45 : 0,
+      lat, lng, photoQuery: `${name} London`,
     });
     const days = [{
       dayNumber: 1, city: "London", theme: "Culture, markets and the South Bank",

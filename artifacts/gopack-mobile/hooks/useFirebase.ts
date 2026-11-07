@@ -201,7 +201,7 @@ export interface Activity {
   fromWish: boolean;
   suggester: string;
   matchedVibe?: string | null;
-  estimatedCost: number | null;
+  estimatedCost: number;
   pricing?: import("@workspace/activity-pricing").ActivityPricing | null;
   labels: string[];
   nearPrevious: boolean;
@@ -293,7 +293,7 @@ function serializePublicActivity(a: any) {
     name: a?.name || "",
     category: classifyActivity({ name: a?.name, description: a?.description, fallback: a?.category || a?.tag }),
     description: a?.description || "",
-    estimatedCost: null,
+    ...(typeof a?.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
     ...(a?.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
   };
 }
@@ -714,7 +714,7 @@ function normalizePublicItineraryDays(days: any): PublicItineraryDay[] | null {
             fallback: activity?.category ?? activity?.tag ?? "",
           }),
           description: activity?.description ?? "",
-          estimatedCost: null,
+          estimatedCost: typeof activity?.estimatedCost === "number" ? activity.estimatedCost : undefined,
           ...(activity?.pricing && typeof activity.pricing === "object" ? { pricing: activity.pricing } : {}),
         }))
       : [],
@@ -883,7 +883,7 @@ function normalizeSavedActivity(id: string, v: any): SavedActivity {
     name: String(v?.name ?? ""),
     description: String(v?.description ?? ""),
     category: classifyActivity({ name: v?.name, description: v?.description, fallback: v?.category }),
-    estimatedCost: null,
+    ...(typeof v?.estimatedCost === "number" ? { estimatedCost: v.estimatedCost } : {}),
     ...(v?.pricing && typeof v.pricing === "object" ? { pricing: v.pricing } : {}),
     savedAt: Number(v?.savedAt ?? 0),
   };
@@ -967,7 +967,7 @@ export async function saveActivity(
     name: activity.name || "",
     description: activity.description || "",
     category: classifyActivity({ name: activity.name, description: activity.description, fallback: activity.category }),
-    estimatedCost: null,
+    ...(typeof activity.estimatedCost === "number" ? { estimatedCost: activity.estimatedCost } : {}),
     ...(activity.pricing ? { pricing: activity.pricing } : {}),
     savedAt: Date.now(),
   });
@@ -1943,7 +1943,7 @@ export async function addActivity(
     fromWish: false,
     suggester: activity.suggester ?? "Member",
     matchedVibe: activity.matchedVibe ?? null,
-    estimatedCost: null,
+    estimatedCost: activity.estimatedCost ?? 0,
     ...(activity.pricing ? { pricing: activity.pricing } : {}),
     labels: activity.labels ?? [],
     nearPrevious: activity.nearPrevious ?? false,

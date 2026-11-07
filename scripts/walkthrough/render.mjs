@@ -20,7 +20,7 @@ const order = [
   "Tied stays stay tied", "Ask Packyo to break the tie", "One chosen stay",
   "Live AI itinerary generation", "The generated result", "Your trip overview", "Wishes and upcoming activities",
   "The day-by-day itinerary", "Activity details", "Edit your itinerary", "Redo activity choices", "Add another activity",
-  "Price transparency", "Live price research", "Check sources before booking", "Practical trip information",
+  "Original activity estimates", "Practical trip information",
   "Map and directions", "The packing checklist", "Shared expenses", "Add and split an expense", "Settle up",
   "Talk with your pack", "Share and export", "Review the trip", "Keep the memories", "Trip alerts",
   "Account and preferences", "Plan together with Packyo",
@@ -78,7 +78,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 const events = [`Dialogue: 0,${time(0)},${time(elapsed)},Footer,,0,0,0,,PACKYO  ·  ACTUAL APP SCREENS  ·  DEMO DATA`];
 let subtitles = "", markdown = "# Packyo app walkthrough\n\n";
 markdown += "Recorded from the actual Expo web-rendered mobile app using an isolated demo account. No app screens were recreated. Example accommodation amounts and expense entries are demo data, not live booking quotes.\n\n";
-markdown += "The captioned video is silent. The companion SRT contains the same chapter explanations.\n\n";
+markdown += "The captioned video is silent. The companion SRT contains the same chapter explanations. The walkthrough shows the original activity cost estimator, without the removed price-verification section.\n\n";
 markdown += "## Files\n\n- [Watch the walkthrough](packyo-app-walkthrough.mp4)\n- [Download captions](packyo-app-walkthrough.srt)\n\n## Chapters\n\n";
 timeline.forEach((segment, i) => {
   const chapter = chapters[segment.index];
@@ -101,6 +101,7 @@ markdown += "Requires the managed API and Expo workflows, Chromium and FFmpeg. R
 markdown += "1. Start headless Chromium on debugging port 9223 with a fresh temporary user-data directory.\n";
 markdown += "2. Run `pnpm --filter @workspace/api-server exec tsx scripts/walkthrough-fixtures.ts` to create an isolated demo pack and sign in the recording browser.\n";
 markdown += "3. Run `node scripts/walkthrough/record.mjs`.\n";
+markdown += "   To refresh estimator-related clips in an existing recording, run `node scripts/walkthrough/record.mjs --estimator-update` after fixture setup.\n";
 markdown += "   Optionally create an empty reuse trip with the fixture script's `--prepare-extras` flag and record `node scripts/walkthrough/record.mjs --extras` for saved-item reuse, the AI tiebreak and a live generation. A separate signed-out Chromium on port 9224 supports `node scripts/walkthrough/record-public.mjs`.\n";
 markdown += "4. Run `node scripts/walkthrough/render.mjs`.\n";
 markdown += "5. Always run `pnpm --filter @workspace/api-server exec tsx scripts/walkthrough-fixtures.ts --cleanup`, then stop the recording browser.\n\n";

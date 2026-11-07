@@ -76,7 +76,7 @@ function normalizeReview(id: string, v: any) {
             time: a.time || "",
             name: a.name || "",
             category: a.category || "",
-            estimatedCost: null,
+            ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
             ...(a.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
           })),
         }))
@@ -383,7 +383,7 @@ export function useTrip(tripId: string) {
                 time: a.time || "",
                 name: a.name || "",
                 category: a.category || "",
-                estimatedCost: null,
+                ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
                 ...(a.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
               })),
             }));
@@ -495,7 +495,7 @@ export function useTrip(tripId: string) {
             time: a.time || "",
             name: a.name || "",
             category: a.category || "",
-            estimatedCost: null,
+            ...(typeof a.estimatedCost === "number" ? { estimatedCost: a.estimatedCost } : {}),
             ...(a.pricing && typeof a.pricing === "object" ? { pricing: a.pricing } : {}),
           })),
         }))

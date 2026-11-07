@@ -9,9 +9,16 @@ const fixture = JSON.parse(readFileSync(`${out}/fixtures.json`, "utf8"));
 const browser = await connectBrowser();
 const base = `https://${process.env.REPLIT_EXPO_DEV_DOMAIN}`;
 const extras = process.argv.includes("--extras");
-const previous = extras ? JSON.parse(readFileSync(`${out}/recording.json`, "utf8")) : null;
+const estimatorUpdate = process.argv.includes("--estimator-update");
+const previous = extras || estimatorUpdate ? JSON.parse(readFileSync(`${out}/recording.json`, "utf8")) : null;
 let recording = false, finished = false, index = previous ? Math.max(...previous.frames.map(f => Number(f.file.split("/").at(-1).split(".")[0]))) + 1 : 0;
 const failed = previous?.issues.map(issue => previous.chapters.findIndex(chapter => chapter.title === issue.title)) ?? [];
+if (estimatorUpdate) {
+  const replace = ["Discover real trip ideas", "Save a stay", "Save an activity", "The day-by-day itinerary",
+    "Price transparency", "Activity details", "Edit your itinerary", "Redo activity choices", "Add another activity",
+    "Practical trip information", "Live price research", "Check sources before booking", "Original activity estimates"];
+  previous.chapters.forEach((chapter, i) => { if (replace.includes(chapter.title)) failed.push(i); });
+}
 const frames = previous?.frames.filter(frame => !failed.includes(frame.chapter)) ?? [];
 const chapters = previous?.chapters ?? [];
 const issues = [];
@@ -56,7 +63,30 @@ const fill = async (placeholder, text) => {
   await browser.send("Input.insertText", { text });
 };
 try {
-  if (extras) {
+  if (estimatorUpdate) {
+    await view(`/discover-itinerary/${fixture.reviewId}`);
+    await shot("Discover real trip ideas", "Open a shared itinerary, see its rating, travellers and where the pack stayed.");
+    await shot("Save a stay", "Save accommodation from a Discover itinerary to your profile.", async () => { await aria("Save The Resident Covent Garden to your stays"); });
+    await shot("Save an activity", "Save British Museum from the itinerary. No price-verification panel or extra price check is required.", async () => { await aria("Save British Museum"); });
+    await view(`/itinerary/${fixture.tripId}`);
+    await browser.click("Itinerary");
+    await shot("The day-by-day itinerary", "Browse scheduled activities and categories without a verified-totals panel.");
+    await browser.click("Info");
+    await shot("Original activity estimates", "The original per-person estimator is back. Example amounts in this demo are illustrative, not booking quotes.", async () => { await browser.scroll(290); });
+    await shot("Activity details", "Open an activity to see its estimated per-person cost.", async () => { await browser.click("Borough Market"); });
+    await view(`/itinerary/${fixture.tripId}`);
+    await browser.click("Itinerary");
+    await shot("Edit your itinerary", "Edit the activity, time, description and original estimated cost.", async () => { await browser.click("Edit"); });
+    await view(`/itinerary/${fixture.tripId}`);
+    await browser.click("Itinerary");
+    await shot("Redo activity choices", "Request a replacement activity using the pack's preferences.", async () => { await browser.click("Redo"); });
+    await view(`/itinerary/${fixture.tripId}`);
+    await browser.click("Itinerary");
+    await shot("Add another activity", "Add an activity and its estimated cost to the plan.", async () => { await browser.click("Add activity"); });
+    await view(`/itinerary/${fixture.tripId}`);
+    await browser.click("Info");
+    await shot("Practical trip information", "Browse activity information and original estimates alongside the itinerary.", async () => { await browser.scroll(200); });
+  } else if (extras) {
     await view(`/wishlist/${fixture.reuseId}`);
     await shot("Reuse a saved activity", "Saved activities for this destination can become normal, votable wishes.", async () => {
       await browser.click("Add a wish from activities", false);
@@ -120,11 +150,8 @@ try {
     if (generated) {
       if ((await browser.text()).includes("Save this group as a Pack?")) await browser.click("Not now");
       await shot("The generated result", "The live request returns a new itinerary for this demo trip.");
-      await browser.click("Itinerary");
-      await shot("Live price research", "Price checks run separately from itinerary generation. Unknown amounts remain unavailable.");
-      recording = false;
-      await pause(25000);
-      await shot("Check sources before booking", "Verified entries show their source and check date; unavailable prices are excluded from totals.", async () => { await browser.scroll(390); });
+      await browser.click("Info");
+      await shot("Original activity estimates", "Activities keep the original per-person cost estimates. These are estimates, not guaranteed booking quotes.", async () => { await browser.scroll(290); });
     } else if (!issues.some(i => i.title === "Live generation")) {
       issues.push({ title: "Live generation", issue: "The live request did not finish during the recording window." });
     }
@@ -164,6 +191,7 @@ try {
 
   await view(`/wishlist/${fixture.planningId}`);
   await shot("Build the pack wishlist", "Each traveller adds wishes. Expand a member to view or add their activities.", async () => { await browser.click("You (Alex Demo)", false); });
+  await view(`/wishlist/${fixture.planningId}`);
   await shot("Reuse a saved activity", "Add a wish from activities filters your saved ideas to the trip destination.", async () => { await browser.click("Add a wish from activities", false); });
   await view(`/wishlist-vote/${fixture.planningId}`);
   await shot("Vote on wishes", "Swipe or use the love and skip controls. Track which members have finished voting.", async () => { await browser.click("By member"); });
@@ -172,6 +200,7 @@ try {
 
   await view(`/accommodation/${fixture.planningId}`);
   await shot("Find somewhere to stay", "Add a listing, submit stay preferences or reuse a saved stay.", async () => { await browser.scroll(360); });
+  await view(`/accommodation-preferences/${fixture.planningId}`);
   await shot("Reuse a saved stay", "Saved London stays can become accommodation options and receive normal pack votes.", async () => { await browser.click("Add from saved stays", false); });
   await view(`/accommodation-preferences/${fixture.planningId}`);
   await shot("Accommodation preferences", "Collect budget, property type, rooms, location and amenities.", async () => { await browser.scroll(440); });
@@ -183,7 +212,7 @@ try {
   await shot("Wishes and upcoming activities", "See what is coming up and who suggested the wishes included in your plan.", async () => { await browser.scroll(470); });
   await browser.click("Itinerary");
   await shot("The day-by-day itinerary", "Browse scheduled activities, categories and who suggested each wish.", async () => { await browser.scroll(350); });
-  await shot("Price transparency", "Unverified prices say Price unavailable. Verify prices looks for source-backed amounts, not AI guesses.", async () => { await browser.scroll(-420); });
+  await shot("Original activity estimates", "The original per-person activity estimator is used, without a price-verification panel.", async () => { await browser.scroll(-420); });
   await shot("Activity details", "Open an activity for its description, practical details and price status.", async () => { await browser.click("British Museum"); });
 
   await view(`/itinerary/${fixture.tripId}`);

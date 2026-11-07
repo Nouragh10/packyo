@@ -1,9 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
 import { callAnthropic } from "../lib/anthropic";
-import { unavailablePrice } from "../lib/activity-prices";
-import { clearGeneratedPriceGuesses, manualActivityPricePatch } from "../lib/activity-price-mutations";
-import type { ActivityPricing } from "@workspace/activity-pricing";
 import { itineraryTool, itineraryResponseText, ITINERARY_TOOL, type ItineraryAiResponse } from "../lib/itinerary-output";
 import { GenerateItineraryBody, GeneratePackingListBody } from "@workspace/api-zod";
 import { getAdminDb, getAdminApp } from "../lib/firebase-admin";
@@ -277,8 +274,7 @@ type RedoActivity = {
   tag: string;
   fromWish: false;
   suggester: "AI pick";
-  estimatedCost: number | null;
-  pricing?: ActivityPricing;
+  estimatedCost: number;
   labels: string[];
   nearPrevious: boolean;
 };
@@ -419,8 +415,7 @@ function normalizeRedoActivity(
     tag,
     fromWish: false,
     suggester: "AI pick",
-    estimatedCost: null,
-    pricing: unavailablePrice(name, null),
+    estimatedCost: Number.isFinite(rawCost) && rawCost >= 0 ? rawCost : 0,
     labels: Array.isArray(activity.labels)
       ? activity.labels.filter((label): label is string => typeof label === "string")
       : [],
@@ -545,7 +540,15 @@ ${vibeGuide}
 7. NO REPEATS ACROSS THE WHOLE TRIP — Never use the same venue name twice anywhere in the itinerary, across ANY day, not just within a single day. Track every venue name you've already used across all previous days and pick a different one each time. Also avoid repeating the same narrow activity type (e.g. two ramen shops, two rooftop bars) more than once per day.
 8. ACCOMMODATION BAN — Do NOT include any hotels, hostels, Airbnbs, resorts, check-ins, check-outs, or any form of "place to stay" as an activity. Activities are things the group DOES, not where they sleep.
 9. For AI pick activities, set "matchedVibe" to the single group vibe this activity best matches (must be one of: ${vibes.map(v => v.toLowerCase()).join(", ")}). For wish-based activities, set "matchedVibe" to null.
-10. DO NOT ESTIMATE PRICES. Set estimatedCost to null. Prices are researched separately against live sources. Budget can influence the choice of venue, never its real admission price. Do not assume an activity is free because its price is unknown.
+10. COST ACCURACY — "estimatedCost" is the price ONE single traveler pays out of pocket, exactly as listed at the ticket counter, on Google, Viator, or GetYourGuide. It is NEVER the group total divided by the number of travelers — do NOT divide by group size. Treat each traveler as booking independently and paying their own full individual admission or meal. Use these realistic single-ticket ranges:
+  NO-ENTRY-COST (always $0): open-air landmarks, beaches, temples with no entry fee, public parks, viewpoints, self-guided walks, markets with no admission charge
+  PAID ADMISSION ($5–30): museums, archaeological sites, palaces, zoos — use the known single-ticket admission price if you know it (e.g. Louvre = $22, Uffizi = $28)
+  GUIDED TOURS booked on Viator/GetYourGuide ($30–150 per person): walking food tours $40–80, city sightseeing tours $30–60, cooking classes $60–130, boat trips/cruises $40–100, wine/spirits tastings $35–80, day trips outside city $80–200, private tours $150–400
+  FOOD & DRINK (price of one person's meal): street food / food stall $3–12, casual local café or noodle shop $8–20, mid-range sit-down restaurant $20–55, upscale restaurant $55–120, fine dining / Michelin $100–250
+  NIGHTLIFE (one person's spend): local bar / beer $8–18, cocktail bar $15–35, rooftop bar $20–45, nightclub entry + drink $20–50
+  WELLNESS (one person's session): spa / hammam $40–120, yoga or fitness class $15–40, surf lesson $50–90
+  Budget modifier: ${budget === "budget" ? "lean toward lower end of each range above; prefer no-admission or cheapest-available options; avoid expensive tours" : budget === "luxury" ? "lean toward upper end; use premium/private pricing; upgrade restaurants to upscale/fine-dining tier" : "use mid-range values within each range above"}
+  NEVER output 25 as a default. NEVER divide a venue's price by the group size. Every activity must have a cost that honestly reflects what one individual pays for that specific venue/experience.
 11. COORDINATES & PHOTO — For every activity include:
   - "photoQuery": a 3–5 word image-search phrase that will return a great photo of this specific activity (e.g. "Uluwatu Temple cliff sunset" or "Tsukiji Fish Market Tokyo morning")
   - "lat": exact latitude of the venue as a decimal number (e.g. -8.8291)
@@ -572,7 +575,7 @@ Respond with ONLY valid JSON in this exact format (no markdown, no extra text):
           "wishText": "optional original guaranteed wish text",
           "suggester": "member name or 'AI pick'",
           "matchedVibe": "culture",
-          "estimatedCost": null,
+          "estimatedCost": 0,
           "labels": ["Must-try"],
           "nearPrevious": false,
           "photoQuery": "Activity name city keyword",
@@ -656,11 +659,11 @@ IMPORTANT RETRY: The previous plan failed validation: ${firstParseError instance
     const dedupedItinerary = await dedupeItineraryVenues(itinerary, destination, req.log, generationSignal);
     // Keep the invariant true after post-processing as well as after the
     // model response. This also protects future itinerary repair passes.
-    res.json(clearGeneratedPriceGuesses(parseItineraryResponse(JSON.stringify(dedupedItinerary), {
+    res.json(parseItineraryResponse(JSON.stringify(dedupedItinerary), {
       expectedDays: days,
       activitiesPerDay,
       guaranteedWishes,
-    })));
+    }));
   } catch (err) {
     if (err instanceof ItineraryResponseError) {
       req.log.warn({ code: err.code, error: err.message }, "Returning recoverable itinerary parse error");
@@ -1506,7 +1509,15 @@ RULES:
 - Must be currently open and operating (confirmed by web search).
 - Prefer iconic, well-known, long-established places (10+ years) over trendy or obscure ones.
 - Description: ONE sentence, max 15 words.
-- Do not estimate a price. Set estimatedCost to null; a separate live-source lookup will research prices.
+- Cost = what ONE individual traveler pays (never group total divided by size):
+    NO-ENTRY-COST $0: open parks, beaches, viewpoints, temples with no entry fee
+    PAID ADMISSION $5–30: museums, palaces, archaeological sites
+    GUIDED TOURS $30–150: food tours $40–80, cooking classes $60–130, boat trips $40–100
+    FOOD (one person's meal): street food $3–12, casual $8–20, mid-range $20–55, upscale $55–120
+    NIGHTLIFE: local bar $8–18, cocktail bar $15–35, rooftop bar $20–45, nightclub $20–50
+    WELLNESS: spa/hammam $40–120, yoga class $15–40
+    Budget modifier (${budgetTier}): ${budgetTier === "budget" ? "lean toward lower end; prefer no-admission/cheap options" : budgetTier === "luxury" ? "lean toward upper end; use premium pricing" : "use mid-range values"}
+  NEVER output 25 as a default. NEVER divide by group size.
 
 After your research, your FINAL message must be ONLY valid JSON (no markdown, no preamble):
 {
@@ -1516,7 +1527,7 @@ After your research, your FINAL message must be ONLY valid JSON (no markdown, no
   "tag": "${redoType === "same_type" ? activity.tag : "culture"}",
   "fromWish": false,
   "suggester": "AI pick",
-  "estimatedCost": null,
+  "estimatedCost": 0,
   "labels": [],
   "nearPrevious": false
 }`;
@@ -1809,7 +1820,7 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
           fromWish: false,
           suggester: member.name?.trim() || "Member",
           matchedVibe: source.matchedVibe ?? null,
-          ...manualActivityPricePatch(source),
+          estimatedCost: Number.isFinite(Number(source.estimatedCost)) ? Number(source.estimatedCost) : 0,
           labels: Array.isArray(source.labels) ? source.labels.slice(0, 8) : [],
           nearPrevious: Boolean(source.nearPrevious),
           ...(typeof source.photoQuery === "string" ? { photoQuery: source.photoQuery } : {}),
@@ -1853,7 +1864,7 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
             ...(typeof source.name === "string" ? { name: source.name.trim() } : {}),
             ...(typeof source.time === "string" ? { time: source.time.trim() } : {}),
             ...(typeof source.description === "string" ? { description: source.description.trim() } : {}),
-            ...manualActivityPricePatch(source, activities[index]),
+            ...(source.estimatedCost !== undefined && Number.isFinite(Number(source.estimatedCost)) ? { estimatedCost: Number(source.estimatedCost) } : {}),
           };
         }
       }
@@ -1914,7 +1925,7 @@ router.post("/trip-activity", async (req: Request, res: Response): Promise<void>
           fromWish: false,
           suggester: member.name?.trim() || "Member",
           matchedVibe: source.matchedVibe ?? null,
-          ...manualActivityPricePatch(source),
+          estimatedCost: Number.isFinite(Number(source.estimatedCost)) ? Number(source.estimatedCost) : 0,
           labels: Array.isArray(source.labels) ? source.labels.slice(0, 8) : [],
           nearPrevious: Boolean(source.nearPrevious),
           ...(typeof source.photoQuery === "string" ? { photoQuery: source.photoQuery } : {}),
@@ -2005,8 +2016,8 @@ router.post("/parse-map-activity", async (req: Request, res: Response): Promise<
       model: "claude-haiku-4-5",
       max_tokens: 700,
       system: `Turn a Google Maps place link into one itinerary activity. Return JSON only:
-{"time":"h:mm AM","name":"string","description":"string","tag":"food|culture|adventure|outdoor|nature|transport|accommodation|relax|nightlife|shopping|beach","estimatedCost":null,"photoQuery":"string","lat":number|null,"lng":number|null}
-Use the place name and coordinates from the supplied URL/title when available. Choose a sensible visit time for the activity type that does not conflict with existing activities on that day. Keep the description factual and concise. Do not estimate a cost; prices are checked separately against live sources.`,
+{"time":"h:mm AM","name":"string","description":"string","tag":"food|culture|adventure|outdoor|nature|transport|accommodation|relax|nightlife|shopping|beach","estimatedCost":0,"photoQuery":"string","lat":number|null,"lng":number|null}
+Use the place name and coordinates from the supplied URL/title when available. Choose a sensible visit time for the activity type that does not conflict with existing activities on that day. Keep the description factual and concise. estimatedCost is the realistic per-person cost in USD, or 0 when unknown.`,
       messages: [{
         role: "user",
         content: JSON.stringify({
@@ -2049,8 +2060,7 @@ Use the place name and coordinates from the supplied URL/title when available. C
         tag: String(parsed.tag ?? "culture"),
         fromWish: false,
         suggester: "Member",
-        estimatedCost: null,
-        pricing: unavailablePrice(typeof parsed.name === "string" ? parsed.name.trim() : "New activity", null),
+        estimatedCost: Number.isFinite(Number(parsed.estimatedCost)) ? Number(parsed.estimatedCost) : 0,
         labels: ["Google Maps"],
         nearPrevious: false,
         photoQuery: String(parsed.photoQuery ?? `${name} ${city || destination}`),

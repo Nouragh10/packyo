@@ -39,197 +39,187 @@ Vote on destinations
 Compare destination suggestions and vote as a group.
 
 9
-00:00:37,500 --> 00:00:42,250
+00:00:37,500 --> 00:00:42,599
 Discover real trip ideas
 Open a shared itinerary, see its rating, travellers and where the pack stayed.
 
 10
-00:00:42,250 --> 00:00:46,750
+00:00:42,599 --> 00:00:47,356
 Save a stay
 Save accommodation from a Discover itinerary to your profile.
 
 11
-00:00:46,750 --> 00:00:52,750
+00:00:47,356 --> 00:00:52,106
 Save an activity
-Activities have category labels. Save British Museum to reuse on another London trip.
+Save British Museum from the itinerary. No price-verification panel or extra price check is required.
 
 12
-00:00:52,750 --> 00:00:57,500
+00:00:52,106 --> 00:00:56,856
 Your travel profile
 Your profile brings together trips, wishes, saved stays, activities and memories.
 
 13
-00:00:57,500 --> 00:01:02,250
+00:00:56,856 --> 00:01:01,606
 Explicitly saved activities
 Only activities you choose to save belong here. Voting does not automatically save them.
 
 14
-00:01:02,250 --> 00:01:07,000
+00:01:01,606 --> 00:01:06,356
 Your saved stays
 Keep stays from Discover ready to reuse when planning the same destination.
 
 15
-00:01:07,000 --> 00:01:11,750
+00:01:06,356 --> 00:01:11,106
 Build the pack wishlist
 Each traveller adds wishes. Expand a member to view or add their activities.
 
 16
-00:01:11,750 --> 00:01:17,750
+00:01:11,106 --> 00:01:17,106
 Reuse a saved activity
 Saved activities for this destination can become normal, votable wishes.
 
 17
-00:01:17,750 --> 00:01:23,750
+00:01:17,106 --> 00:01:23,106
 Add the saved wish
 British Museum is added to the new trip's wishlist rather than being automatically copied.
 
 18
-00:01:23,750 --> 00:01:28,500
+00:01:23,106 --> 00:01:27,856
 Vote on wishes
 Swipe or use the love and skip controls. Track which members have finished voting.
 
 19
-00:01:28,500 --> 00:01:33,250
+00:01:27,856 --> 00:01:32,606
 Review wishlist results
 See the pack's activity preferences before building the itinerary.
 
 20
-00:01:33,250 --> 00:01:38,000
+00:01:32,606 --> 00:01:37,356
 Find somewhere to stay
 Add a listing, submit stay preferences or reuse a saved stay.
 
 21
-00:01:38,000 --> 00:01:42,750
+00:01:37,356 --> 00:01:42,106
 Accommodation preferences
 Collect budget, property type, rooms, location and amenities.
 
 22
-00:01:42,750 --> 00:01:48,250
+00:01:42,106 --> 00:01:47,606
 Reuse a saved stay
 Open saved stays for the same destination and add one as a voting option.
 
 23
-00:01:48,250 --> 00:01:54,000
+00:01:47,606 --> 00:01:53,356
 Add a stay for the pack
 A saved stay becomes a normal accommodation suggestion, not an automatic booking.
 
 24
-00:01:54,000 --> 00:01:59,500
+00:01:53,356 --> 00:01:58,856
 Tied stays stay tied
 Both tied options display WINNER. Packyo only breaks the vote when the creator requests it.
 
 25
-00:01:59,500 --> 00:02:05,250
+00:01:58,856 --> 00:02:04,606
 Ask Packyo to break the tie
 The creator explicitly requests a choice between the tied winners.
 
 26
-00:02:05,250 --> 00:02:09,750
+00:02:04,606 --> 00:02:09,106
 One chosen stay
 After the requested tiebreak, Book this one appears for the selected stay. No booking is made.
 
 27
-00:02:09,750 --> 00:02:14,500
+00:02:09,106 --> 00:02:13,856
 Live AI itinerary generation
 This chapter starts a real itinerary request for the temporary one-day London trip.
 
 28
-00:02:14,500 --> 00:02:19,250
+00:02:13,856 --> 00:02:18,606
 The generated result
 The live request returns a new itinerary for this demo trip.
 
 29
-00:02:19,250 --> 00:02:24,000
+00:02:18,606 --> 00:02:23,356
 Your trip overview
 Destination, dates, budget, pack members and vibes appear before the day-by-day itinerary.
 
 30
-00:02:24,000 --> 00:02:28,500
+00:02:23,356 --> 00:02:27,856
 Wishes and upcoming activities
 See what is coming up and who suggested the wishes included in your plan.
 
 31
-00:02:28,500 --> 00:02:33,250
+00:02:27,856 --> 00:02:32,606
 The day-by-day itinerary
-Browse scheduled activities, categories and who suggested each wish.
+Browse scheduled activities and categories without a verified-totals panel.
 
 32
-00:02:33,250 --> 00:02:38,000
+00:02:32,606 --> 00:02:37,356
 Activity details
-Open an activity for its description, practical details and price status.
+Open an activity to see its estimated per-person cost.
 
 33
-00:02:38,000 --> 00:02:43,500
+00:02:37,356 --> 00:02:42,106
 Edit your itinerary
-Open an activity to change its name, time, description or manually entered price.
+Edit the activity, time, description and original estimated cost.
 
 34
-00:02:43,500 --> 00:02:49,000
+00:02:42,106 --> 00:02:46,856
 Redo activity choices
-Request a replacement or a different part of an activity. Changes remain within the trip.
+Request a replacement activity using the pack's preferences.
 
 35
-00:02:49,000 --> 00:02:54,500
+00:02:46,856 --> 00:02:51,606
 Add another activity
-Use the add-activity tools to extend the plan.
+Add an activity and its estimated cost to the plan.
 
 36
-00:02:54,500 --> 00:02:59,000
-Price transparency
-Unverified prices say Price unavailable. Verify prices looks for source-backed amounts, not AI guesses.
+00:02:51,606 --> 00:02:56,106
+Original activity estimates
+The original per-person estimator is back. Example amounts in this demo are illustrative, not booking quotes.
 
 37
-00:02:59,000 --> 00:03:03,750
-Live price research
-Price checks run separately from itinerary generation. Unknown amounts remain unavailable.
+00:02:56,106 --> 00:03:00,856
+Practical trip information
+Browse activity information and original estimates alongside the itinerary.
 
 38
-00:03:03,750 --> 00:03:08,500
-Check sources before booking
-Verified entries show their source and check date; unavailable prices are excluded from totals.
-
-39
-00:03:08,500 --> 00:03:13,000
-Practical trip information
-Keep trip information together alongside your itinerary.
-
-40
-00:03:13,000 --> 00:03:17,750
+00:03:00,856 --> 00:03:05,606
 Map and directions
 See the day's stops and open directions in an external maps app.
 
-41
-00:03:17,750 --> 00:03:22,500
+39
+00:03:05,606 --> 00:03:10,356
 The packing checklist
 Manage essentials and clothing. Check items off as you pack.
 
-42
-00:03:22,500 --> 00:03:27,250
+40
+00:03:10,356 --> 00:03:15,106
 Shared expenses
 Track total spending, your balance, member balances and recent expenses.
 
-43
-00:03:27,250 --> 00:03:31,750
+41
+00:03:15,106 --> 00:03:19,606
 Add and split an expense
 Choose who paid, who shares the cost, and equal or custom splits.
 
-44
-00:03:31,750 --> 00:03:36,500
+42
+00:03:19,606 --> 00:03:24,356
 Settle up
 Record repayment between members. Packyo tracks the record; it does not transfer money.
 
-45
-00:03:36,500 --> 00:03:41,250
+43
+00:03:24,356 --> 00:03:29,106
 Talk with your pack
 Keep planning conversations inside the trip.
 
-46
-00:03:41,250 --> 00:03:45,750
+44
+00:03:29,106 --> 00:03:33,606
 Share and export
 Export options include PDF and calendar. Native iOS share sheets require the installed app.
 
-47
-00:03:45,750 --> 00:03:50,500
+45
+00:03:33,606 --> 00:03:38,356
 Plan together with Packyo
 Actual app pages, real interactions and isolated demo data. No real bookings, payments or invitations were made.
 

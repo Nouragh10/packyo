@@ -50,13 +50,17 @@ export async function connectBrowser(port = 9223) {
       writeFileSync(path, Buffer.from(result.data, "base64"));
     },
     async click(text, exact = true) {
-      const point = await evaluate(`(() => {
+      let point = null;
+      for (let attempt = 0; attempt < 16 && !point; attempt++) {
+        point = await evaluate(`(() => {
         const items = [...document.querySelectorAll('button,[role="button"],a,[tabindex],div,span')];
         const matches = items.filter(e => ${exact ? "e.innerText.trim() ===" : "e.innerText.includes("} ${JSON.stringify(text)} ${exact ? "" : ")"} && e.getBoundingClientRect().width && e.getBoundingClientRect().height);
         const el = matches.sort((a,b) => a.innerText.length - b.innerText.length || a.getBoundingClientRect().height - b.getBoundingClientRect().height)[0];
         if (!el) return null; el.scrollIntoView({block:'center'});
         const r = el.getBoundingClientRect(); return {x:r.x+r.width/2,y:r.y+r.height/2};
       })()`);
+        if (!point) await new Promise(resolve => setTimeout(resolve, 250));
+      }
       if (!point) throw new Error(`No visible button: ${text}`);
       await send("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", clickCount: 1 });
       await send("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", clickCount: 1 });

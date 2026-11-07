@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRoute, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Clock, Sparkles, ShieldCheck, AlertCircle, Star, Loader2,
+  ArrowLeft, Clock, Sparkles, AlertCircle, Star, Loader2,
   FileDown, CalendarPlus, Edit2, Plus, Check, X, MapPin, Users, Eye,
   RotateCcw, Trash2, Lock, Zap
 } from "lucide-react";
@@ -12,8 +12,6 @@ import { incrementAiUsage } from "@/hooks/useFirebase";
 import { useAuth } from "@/hooks/useAuth";
 import { UpgradeModal } from "@/components/UpgradeModal";
 import { ActivityPrice, ActivityPricePrint } from "@/components/ActivityPrice";
-import { useActivityPrices } from "@/hooks/useActivityPrices";
-import { summarizeActivityPrices, validPriceCurrency, activityPricePresentation } from "@workspace/activity-pricing";
 
 /* ─── constants ─────────────────────────────────────────────── */
 const TAG_COLORS: Record<string, string> = {
@@ -185,61 +183,27 @@ function downloadFile(content: string, filename: string, mimeType: string) {
 }
 
 /* ─── manual price helpers ───────────────────────────────────── */
-const COMMON_CURRENCIES = ["USD","EUR","GBP","JPY","CAD","AUD","MXN","CHF","CNY","INR","THB","SGD","NZD","KRW","BRL","ZAR","SEK","NOK","DKK","AED","TRY","IDR","VND","PHP","HKD","CZK","PLN","HUF","ISK","MAD","EGP","PEN","COP","ARS","CLP"];
-
 function initialPriceFields(activity: any, tripCurrency: string | null) {
-  const p = activity?.pricing;
-  const amount = p && typeof p.amount === "number" && (p.status === "user_entered" || p.status === "verified") ? String(p.amount) : "";
-  const currency = validPriceCurrency(p?.currency) ? p.currency : tripCurrency || "";
-  return { priceAmount: amount, priceCurrency: currency };
+  return { estimatedCost: Number(activity?.estimatedCost) || 0 };
 }
 
-/** Apply name/price edits: any change to name or price drops the old source. */
+/** Keep the original editable per-person activity estimate. */
 function applyManualPrice(original: any, form: any) {
-  const { priceAmount, priceCurrency, ...rest } = form;
-  const next: any = { ...rest, estimatedCost: null };
-  const nameChanged = (original?.name ?? "") !== (rest.name ?? "");
-  const init = initialPriceFields(original, null);
-  const raw = String(priceAmount ?? "").trim();
-  const priceChanged = raw !== init.priceAmount || (raw !== "" && priceCurrency !== original?.pricing?.currency);
-  if (!nameChanged && !priceChanged && original?.pricing) { next.pricing = original.pricing; return next; }
-  const amount = raw === "" ? NaN : Number(raw);
-  if (Number.isFinite(amount) && amount >= 0 && validPriceCurrency(priceCurrency)) {
-    next.pricing = { status: "user_entered", amount, currency: priceCurrency, sourceUrl: null, sourceTitle: null, evidence: null, checkedAt: new Date().toISOString(), activityName: rest.name || "", note: "Entered by a pack member; not independently verified." };
-  } else {
-    next.pricing = null; // unknown — background check may find a source
-  }
-  return next;
+  return { ...form, estimatedCost: Number(form.estimatedCost) || 0 };
 }
 
 function PriceFields({ form, set_, tripCurrency }: { form: any; set_: (k: string, v: any) => void; tripCurrency: string | null }) {
-  const raw = String(form.priceAmount ?? "").trim();
-  const bad = raw !== "" && (!Number.isFinite(Number(raw)) || Number(raw) < 0 || !validPriceCurrency(form.priceCurrency));
   return (
     <div>
-      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Price per person (optional)</label>
-      <div className="flex gap-2">
-        <input type="number" min={0} step="any" inputMode="decimal" value={form.priceAmount} onChange={e=>set_("priceAmount",e.target.value)} placeholder="Unknown"
+      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide block mb-1">Est. cost ($)</label>
+        <input type="number" min={0} step="any" inputMode="decimal" value={form.estimatedCost ?? 0} onChange={e=>set_("estimatedCost",Number(e.target.value))} placeholder="0"
           className="w-full min-w-0 border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" data-testid="input-price-amount"/>
-        {tripCurrency ? (
-          <span className="flex items-center px-3 text-xs font-semibold border border-border rounded-lg bg-muted/50 text-muted-foreground" data-testid="text-price-currency">{tripCurrency}</span>
-        ) : (
-          <select value={form.priceCurrency} onChange={e=>set_("priceCurrency",e.target.value)} className="border border-border rounded-lg px-2 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/30" data-testid="select-price-currency">
-            <option value="">Currency</option>
-            {COMMON_CURRENCIES.filter(c=>validPriceCurrency(c)).map(c=><option key={c} value={c}>{c}</option>)}
-          </select>
-        )}
-      </div>
-      <p className={`text-[11px] mt-1 ${bad ? "text-destructive" : "text-muted-foreground"}`}>
-        {bad ? "Enter a non-negative amount and choose a currency, or leave blank." : "Saved as user-entered, not verified. Leave blank if unknown."}
-      </p>
     </div>
   );
 }
 
 function priceFieldsInvalid(form: any) {
-  const raw = String(form.priceAmount ?? "").trim();
-  return raw !== "" && (!Number.isFinite(Number(raw)) || Number(raw) < 0 || !validPriceCurrency(form.priceCurrency));
+  return form.estimatedCost != null && (!Number.isFinite(Number(form.estimatedCost)) || Number(form.estimatedCost) < 0);
 }
 
 /* ─── ActivityEditor ─────────────────────────────────────────── */
@@ -272,7 +236,7 @@ function ActivityEditor({ activity, onSave, onCancel, tripCurrency }: { activity
 
 /* ─── AddActivityForm ────────────────────────────────────────── */
 function AddActivityForm({ dayIndex, onAdd, onCancel, userName, tripCurrency }: { dayIndex: number; onAdd: (di: number, a: any) => void; onCancel: () => void; userName: string; tripCurrency: string | null }) {
-  const [form, setForm] = useState<any>({ name:"", time:"", description:"", tag:"travel", labels:[], fromWish:false, suggester: userName || "Member", priceAmount:"", priceCurrency: tripCurrency || "" });
+  const [form, setForm] = useState<any>({ name:"", time:"", description:"", tag:"travel", labels:[], fromWish:false, suggester: userName || "Member", estimatedCost:0 });
   const set_ = (k: string, v: any) => setForm((f: any)=>({ ...f, [k]: v }));
   return (
     <div className="border-2 border-dashed border-primary/40 rounded-2xl p-5 bg-primary/5 flex flex-col gap-3">
@@ -306,7 +270,8 @@ function PackyoPrintReport({ itinerary, trip }: { itinerary: any; trip: any }) {
     new Set(days.flatMap((day: any) => (day.activities || []).map((activity: any) => activity.tag).filter(Boolean)))
   ) as string[];
   const vibes = Array.isArray(trip?.vibes) && trip.vibes.length ? trip.vibes : activityTags;
-  const priceSummary = summarizeActivityPrices(days.flatMap((day: any) => day.activities || []));
+  const totalCost = days.flatMap((day: any) => day.activities || [])
+    .reduce((sum: number, activity: any) => sum + (Number(activity.estimatedCost) || 0), 0);
   const activityCount = days.reduce((sum: number, day: any) => sum + (day.activities?.length || 0), 0);
   const destination = trip?.destination || "Your destination";
   const generatedOn = new Intl.DateTimeFormat("en-US", {
@@ -398,13 +363,9 @@ function PackyoPrintReport({ itinerary, trip }: { itinerary: any; trip: any }) {
         </section>
 
         <footer className="packyo-report-total">
-          <p>VERIFIED ACTIVITY PRICES · ALL {days.length} {days.length === 1 ? "DAY" : "DAYS"}</p>
-          <strong>{priceSummary.totals.length ? priceSummary.totals.map(t => t.label).join(" + ") : "No verified prices yet"}</strong>
-          <span>
-            per person · {priceSummary.verifiedCount} of {activityCount} {activityCount === 1 ? "activity" : "activities"} source-verified
-            {priceSummary.hasFromPrices ? " · includes starting prices" : ""}
-            {priceSummary.unknownCount > 0 ? ` · ${priceSummary.unknownCount} unpriced, not included` : ""}
-          </span>
+          <p>ESTIMATED TOTAL · ALL {days.length} {days.length === 1 ? "DAY" : "DAYS"}</p>
+          <strong>~${totalCost.toLocaleString()}</strong>
+          <span>per person · {activityCount} {activityCount === 1 ? "activity" : "activities"}</span>
           <div className="packyo-report-footer">
             <b>Packyo</b>
             <span>Plan trips together ✦</span>
@@ -451,6 +412,7 @@ function mergeServerPricing(local: any, prevBaseline: any, server: any): any {
       const after = findCounterpart(server, act, di, ai);
       if (!before || !after) return;
       const untouched = before.name === act.name && after.name === act.name &&
+        before.estimatedCost === act.estimatedCost &&
         JSON.stringify(before.pricing ?? null) === JSON.stringify(act.pricing ?? null);
       if (!untouched) return;
       act.pricing = after.pricing ?? null;
@@ -518,10 +480,9 @@ export default function Itinerary() {
     return () => unsub();
   }, [tripId]);
 
-  const tripCurrency: string | null = validPriceCurrency(trip?.currency) ? trip.currency : null;
-  const priceAutoKey = canShowItineraryKey(trip, itinerary);
-  const prices = useActivityPrices({ kind: "trip", id: tripId, user, autoKey: priceAutoKey });
-  const activityPriceSummary = summarizeActivityPrices((localItinerary?.days || []).flatMap((d: any) => d.activities || []));
+  const tripCurrency = null;
+  const estimatedTotal = (localItinerary?.days || []).flatMap((d: any) => d.activities || [])
+    .reduce((sum: number, activity: any) => sum + (Number(activity.estimatedCost) || 0), 0);
 
   const isDirty = JSON.stringify(localItinerary) !== JSON.stringify(itinerary);
 
@@ -1054,34 +1015,9 @@ export default function Itinerary() {
                     title={isPremium ? "Export as PDF" : "Pack Plus — Export PDF"}>
                     <FileDown size={14}/> Export PDF
                   </button>
-                  <button
-                    onClick={prices.verify}
-                    disabled={!user || (prices.running && prices.manual)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm border border-emerald-200 text-emerald-800 bg-emerald-50 rounded-full hover:bg-emerald-100 transition-colors disabled:opacity-60"
-                    title="Look up current prices from official sources"
-                    data-testid="button-verify-prices">
-                    {prices.running && prices.manual ? <Loader2 size={14} className="animate-spin"/> : <ShieldCheck size={14}/>}
-                    {prices.running && prices.manual ? "Verifying prices…" : "Verify prices"}
-                  </button>
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" data-testid="status-activity-prices">
-                  <span>
-                    <span className="font-semibold text-foreground/80">
-                      {activityPriceSummary.totals.length ? activityPriceSummary.totals.map(t => t.label).join(" + ") : "No verified prices yet"}
-                    </span>
-                    {" "}per person · {activityPriceSummary.verifiedCount} source-verified
-                    {activityPriceSummary.hasFromPrices ? " (some are starting prices)" : ""}
-                    {activityPriceSummary.unknownCount > 0 ? ` · ${activityPriceSummary.unknownCount} unavailable, not counted` : ""}
-                  </span>
-                  {prices.running && (
-                    <span className="flex items-center gap-1"><Loader2 size={11} className="animate-spin"/> Checking sources{prices.checked ? ` · ${prices.checked} checked` : ""}</span>
-                  )}
-                  {prices.error && !prices.running && (
-                    <span className="flex items-center gap-1 text-destructive" data-testid="text-price-error">
-                      <AlertCircle size={11}/> {prices.error}
-                      <button onClick={prices.verify} className="underline ml-1" data-testid="button-retry-prices">Retry</button>
-                    </span>
-                  )}
+                <div className="mt-4 text-xs text-muted-foreground" data-testid="status-activity-estimates">
+                  Estimated total: <span className="font-semibold text-foreground/80">~${estimatedTotal}</span> per person
                 </div>
               </motion.div>
 
@@ -1408,7 +1344,7 @@ export default function Itinerary() {
                               <div style={{fontSize:13,color:"#6b7280",lineHeight:1.5,fontFamily:"sans-serif"}}>{act.description}</div>
                             </div>
                             <div style={{minWidth:72,textAlign:"right",fontWeight:600,fontSize:14,fontFamily:"sans-serif",color:"#374151"}}>
-                              {activityPricePresentation(act).label}
+                              {act.estimatedCost === 0 ? "No entry fee" : typeof act.estimatedCost === "number" ? `~$${act.estimatedCost}` : "Estimate unavailable"}
                             </div>
                           </div>
                         );

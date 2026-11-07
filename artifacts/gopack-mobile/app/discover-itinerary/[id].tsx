@@ -14,8 +14,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { WikiImage } from "@/components/WikiImage";
-import { ActivityPrice, ActivityPriceSummary, VerifyPricesButton } from "@/components/ActivityPrice";
-import { useActivityPrices } from "@/hooks/useActivityPrices";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -84,6 +82,7 @@ function ActivityRow({
   const key = savedActivityKey(save.reviewId, day.day, activity);
   const saved = save.isSaved(key);
   const pending = save.isPending(key);
+  const hasCost = typeof activity.estimatedCost === "number";
 
   return (
     <View style={styles.activityRow}>
@@ -135,7 +134,11 @@ function ActivityRow({
             {activity.description}
           </Text>
         ) : null}
-        <ActivityPrice activity={activity} />
+        {hasCost ? (
+          <Text style={[styles.activityCost, { color: activity.estimatedCost === 0 ? "#26A69A" : colors.foreground }]}>
+            {activity.estimatedCost === 0 ? "No entry fee" : `≈ $${activity.estimatedCost} / person`}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -209,9 +212,6 @@ export default function DiscoverItineraryPreviewScreen() {
   const [itemError, setItemError] = React.useState("");
   const savedActivityIds = React.useMemo(() => new Set(savedActivities.map((a) => a.id)), [savedActivities]);
   const savedStayIds = React.useMemo(() => new Set(savedStays.map((s) => s.id)), [savedStays]);
-  const reviewActivityCount = (review?.itineraryDays ?? []).reduce((n, d) => n + d.activities.length, 0);
-  const reviewNamesKey = (review?.itineraryDays ?? []).flatMap((d) => d.activities.map((a) => (a.name ?? "").trim().toLowerCase())).join("|");
-  const prices = useActivityPrices("review", id, review && reviewActivityCount > 0 ? reviewNamesKey : null);
 
   const uidForState = user?.uid ?? null;
   React.useEffect(() => {
@@ -499,13 +499,6 @@ export default function DiscoverItineraryPreviewScreen() {
             <Text style={[styles.readOnlyText, { color: colors.mutedForeground }]}>Save what you like</Text>
           </View>
         </View>
-
-        {days.length > 0 ? (
-          <View style={{ marginHorizontal: 16, marginBottom: 18, gap: 8 }}>
-            <ActivityPriceSummary activities={days.flatMap((d) => d.activities)} />
-            {user ? <VerifyPricesButton running={prices.running} error={prices.error} progress={prices.progress} onPress={prices.verifyNow} /> : null}
-          </View>
-        ) : null}
 
         {days.length > 0 ? (
           days.map((day) => <DaySection key={day.day} day={day} colors={colors} save={activitySave} />)
