@@ -26,6 +26,7 @@ import {
   signInWithEmail,
   signInWithGoogleCredential,
   signUpWithEmail,
+  sendVerificationEmail,
   signOut,
   updateCurrentUserProfile,
 } from "@/lib/firebase";
@@ -191,11 +192,11 @@ export default function SignInScreen() {
     setResent(false);
     setError("");
     try {
-      const { sendEmailVerification } = await import("firebase/auth");
       const cred = await signInWithEmail(email.trim(), password);
-      await sendEmailVerification(cred.user);
+      const result = await sendVerificationEmail(cred.user);
       await signOut();
-      setResent(true);
+      if (result === "recent") setError("We just sent one. Give it a minute and check your spam folder.");
+      else setResent(true);
     } catch {
       setError("Could not resend email. Try again.");
     }
@@ -322,7 +323,7 @@ export default function SignInScreen() {
             <Text style={styles.verifyEmail}>{email.trim()}</Text>
           </Text>
           <Text style={styles.verifyHint}>
-            Open the link in your inbox, then come back and tap Continue.
+            Look for an email from Packyo (check spam too), tap Confirm my email, then come back and tap Continue.
           </Text>
 
           {!!error && <Text style={[styles.errorText, { marginBottom: 4 }]}>{error}</Text>}
