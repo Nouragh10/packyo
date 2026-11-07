@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Platform } from "react-native";
+import { setAnalyticsUser } from "@/lib/analytics";
 import { auth, onAuthStateChanged, User } from "@/lib/firebase";
 
 interface AuthContextType {
@@ -20,6 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     const finishLoading = (u: User | null) => {
       if (!active) return;
+      setAnalyticsUser(u?.uid ?? null);
       setUser(u);
       setLoading(false);
     };

@@ -7,7 +7,8 @@ import {
 } from "@expo-google-fonts/dm-sans";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getConfiguredApiBaseUrl, setBaseUrl } from "@/lib/api-client";
-import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
+import { Stack, usePathname, useRootNavigationState, useRouter, useSegments } from "expo-router";
+import { trackScreen } from "@/lib/analytics";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useState } from "react";
@@ -28,6 +29,11 @@ function RootLayoutNav() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (pathname) trackScreen(pathname);
+  }, [pathname]);
   const navigationState = useRootNavigationState();
 
   useEffect(() => {

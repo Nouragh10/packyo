@@ -29,7 +29,8 @@
           "comgooglemaps"
         ]
       },
-      "buildNumber": "2"
+      "buildNumber": "2",
+      "googleServicesFile": "./GoogleService-Info.plist"
     },
     "android": {
       "package": "com.gopacknow.app"
@@ -46,26 +47,43 @@
       ],
       "expo-font",
       "expo-web-browser",
-       [
-         "expo-image-picker",
-         {
-           "photosPermission": "Allow Packyo to access your photos so you can choose a profile picture."
-         }
-       ],
-       "expo-apple-authentication",
-       [
-         "expo-notifications",
-         {
-           "icon": "./assets/images/icon.png",
-           "color": "#F15A3A"
-         }
-       ],
-       [
-         "expo-calendar",
-         {
-           "calendarPermission": "Allow Packyo to add your itinerary activities to your calendar."
-         }
-       ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Packyo to access your photos so you can choose a profile picture."
+        }
+      ],
+      "expo-apple-authentication",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#F15A3A"
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Packyo to add your itinerary activities to your calendar."
+        }
+      ],
+      "@react-native-firebase/app",
+      [
+        "@react-native-firebase/analytics",
+        {
+          "ios": {
+            "withoutAdIdSupport": true
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
