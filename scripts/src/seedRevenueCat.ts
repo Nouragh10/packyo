@@ -7,9 +7,6 @@ import {
   listAppPublicApiKeys,
   listProducts,
   createProduct,
-  listEntitlements,
-  createEntitlement,
-  attachProductsToEntitlement,
   listOfferings,
   createOffering,
   updateOffering,
@@ -19,7 +16,6 @@ import {
   type App,
   type Product,
   type Project,
-  type Entitlement,
   type Offering,
   type Package,
   type CreateProductData,
@@ -27,58 +23,33 @@ import {
 
 const PROJECT_NAME = "gopack\u2024now";
 
-// Monthly Plus subscription ($9.99/mo)
-const PRODUCT_IDENTIFIER = "pack_plus_monthly_999";
-const PLAY_STORE_PRODUCT_IDENTIFIER = "pack_plus_monthly_999:monthly";
-const PRODUCT_DISPLAY_NAME = "Pack Plus Monthly 9.99";
-const PRODUCT_USER_FACING_TITLE = "Plus Monthly";
-const PRODUCT_DURATION = "P1M";
-const PRODUCT_PRICES = [{ amount_micros: 9990000, currency: "USD" }]; // $9.99
+// Pay-per-itinerary unlocks (one-time, consumable so they can be bought once per trip)
+const UNLOCKS = [
+  {
+    label: "Group Itinerary Unlock",
+    identifier: "itinerary_group_unlock_399",
+    playIdentifier: "itinerary_group_unlock_399",
+    title: "Unlock for the whole pack",
+    prices: [{ amount_micros: 3990000, currency: "USD" }], // $3.99
+    packageKey: "itinerary_group",
+  },
+  {
+    label: "Personal Itinerary Unlock",
+    identifier: "itinerary_personal_unlock_299",
+    playIdentifier: "itinerary_personal_unlock_299",
+    title: "Unlock just for me",
+    prices: [{ amount_micros: 2990000, currency: "USD" }], // $2.99
+    packageKey: "itinerary_personal",
+  },
+] as const;
 
-// Yearly Pro subscription ($19.99/yr)
-const YEARLY_PRODUCT_IDENTIFIER = "pack_plus_yearly_1999";
-const PLAY_STORE_YEARLY_PRODUCT_IDENTIFIER = "pack_plus_yearly_1999:yearly";
-const YEARLY_PRODUCT_DISPLAY_NAME = "Pack Plus Yearly 19.99";
-const YEARLY_PRODUCT_USER_FACING_TITLE = "Pro Yearly";
-const YEARLY_PRODUCT_DURATION = "P1Y";
-const YEARLY_PRODUCT_PRICES = [{ amount_micros: 19990000, currency: "USD" }]; // $19.99
-
-// Trip unlock one-time purchase ($5.99)
-const TRIP_PRODUCT_IDENTIFIER = "trip_unlock_599";
-const PLAY_STORE_TRIP_PRODUCT_IDENTIFIER = "trip_unlock_599:trip";
-const TRIP_PRODUCT_DISPLAY_NAME = "Trip Unlock 5.99";
-const TRIP_PRODUCT_USER_FACING_TITLE = "Trip Unlock";
-const TRIP_PRODUCT_PRICES = [{ amount_micros: 5990000, currency: "USD" }]; // $5.99
-
-// Day unlock one-time purchase ($2.99)
-const DAY_PRODUCT_IDENTIFIER = "itinerary_day_unlock_299";
-const PLAY_STORE_DAY_PRODUCT_IDENTIFIER = "itinerary_day_unlock_299:day";
-const DAY_PRODUCT_DISPLAY_NAME = "Day Unlock 2.99";
-const DAY_PRODUCT_USER_FACING_TITLE = "Day Unlock";
-const DAY_PRODUCT_PRICES = [{ amount_micros: 2990000, currency: "USD" }]; // $2.99
-
-const APP_STORE_APP_NAME = "GoPackNow iOS";
-const APP_STORE_BUNDLE_ID = "com.gopack.app";
-const PLAY_STORE_APP_NAME = "GoPackNow Android";
+const APP_STORE_APP_NAME = "Packyo iOS";
+const APP_STORE_BUNDLE_ID = "com.gopacknow.app";
+const PLAY_STORE_APP_NAME = "Packyo Android";
 const PLAY_STORE_PACKAGE_NAME = "com.gopacknow.app";
 
-const ENTITLEMENT_IDENTIFIER = "pack_plus";
-const ENTITLEMENT_DISPLAY_NAME = "Pack Plus";
-
-const OFFERING_IDENTIFIER = "default";
-const OFFERING_DISPLAY_NAME = "Default Offering";
-
-const PACKAGE_IDENTIFIER = "$rc_monthly";
-const PACKAGE_DISPLAY_NAME = "Monthly";
-
-const ANNUAL_PACKAGE_IDENTIFIER = "yearly_pro_1999";
-const ANNUAL_PACKAGE_DISPLAY_NAME = "Yearly Pro";
-
-const TRIP_PACKAGE_IDENTIFIER = "trip_unlock";
-const TRIP_PACKAGE_DISPLAY_NAME = "Trip Unlock";
-
-const DAY_PACKAGE_IDENTIFIER = "day_unlock_299";
-const DAY_PACKAGE_DISPLAY_NAME = "Day Unlock 299";
+const OFFERING_IDENTIFIER = "itinerary_unlock";
+const OFFERING_DISPLAY_NAME = "Itinerary Unlock";
 
 type TestStorePricesResponse = {
   object: string;
@@ -162,7 +133,7 @@ async function seedRevenueCat() {
     isTestStore: boolean,
     displayName: string,
     userFacingTitle: string,
-    opts: { type: "subscription"; duration: string } | { type: "non_consumable" },
+    opts: { type: "subscription"; duration: string } | { type: "non_consumable" } | { type: "consumable" },
   ): Promise<Product> => {
     const existing = existingProducts.items?.find((p) => p.store_identifier === identifier && p.app_id === targetApp.id);
     if (existing) { console.log(label + " product exists:", existing.id); return existing; }
@@ -203,72 +174,9 @@ async function seedRevenueCat() {
     }
   };
 
-  // Monthly Plus ($9.99/mo)
-  const testStoreProduct = await ensureProduct(app, "Test Store [Monthly Plus]", PRODUCT_IDENTIFIER, true, PRODUCT_DISPLAY_NAME, PRODUCT_USER_FACING_TITLE, { type: "subscription", duration: PRODUCT_DURATION });
-  const appStoreProduct = await ensureProduct(appStoreApp, "App Store [Monthly Plus]", PRODUCT_IDENTIFIER, false, PRODUCT_DISPLAY_NAME, PRODUCT_USER_FACING_TITLE, { type: "subscription", duration: PRODUCT_DURATION });
-  const playStoreProduct = await ensureProduct(playStoreApp, "Play Store [Monthly Plus]", PLAY_STORE_PRODUCT_IDENTIFIER, false, PRODUCT_DISPLAY_NAME, PRODUCT_USER_FACING_TITLE, { type: "subscription", duration: PRODUCT_DURATION });
-  await addTestStorePrices(testStoreProduct.id, PRODUCT_PRICES, "Monthly Plus");
-
-  // Yearly Pro ($19.99/yr)
-  const testStoreYearlyProduct = await ensureProduct(app, "Test Store [Yearly Pro]", YEARLY_PRODUCT_IDENTIFIER, true, YEARLY_PRODUCT_DISPLAY_NAME, YEARLY_PRODUCT_USER_FACING_TITLE, { type: "subscription", duration: YEARLY_PRODUCT_DURATION });
-  const appStoreYearlyProduct = await ensureProduct(appStoreApp, "App Store [Yearly Pro]", YEARLY_PRODUCT_IDENTIFIER, false, YEARLY_PRODUCT_DISPLAY_NAME, YEARLY_PRODUCT_USER_FACING_TITLE, { type: "subscription", duration: YEARLY_PRODUCT_DURATION });
-  const playStoreYearlyProduct = await ensureProduct(playStoreApp, "Play Store [Yearly Pro]", PLAY_STORE_YEARLY_PRODUCT_IDENTIFIER, false, YEARLY_PRODUCT_DISPLAY_NAME, YEARLY_PRODUCT_USER_FACING_TITLE, { type: "subscription", duration: YEARLY_PRODUCT_DURATION });
-  await addTestStorePrices(testStoreYearlyProduct.id, YEARLY_PRODUCT_PRICES, "Yearly Pro");
-
-  // Trip Unlock ($5.99) — one-time non-consumable
-  const testStoreTripProduct = await ensureProduct(app, "Test Store [Trip Unlock]", TRIP_PRODUCT_IDENTIFIER, true, TRIP_PRODUCT_DISPLAY_NAME, TRIP_PRODUCT_USER_FACING_TITLE, { type: "non_consumable" });
-  const appStoreTripProduct = await ensureProduct(appStoreApp, "App Store [Trip Unlock]", TRIP_PRODUCT_IDENTIFIER, false, TRIP_PRODUCT_DISPLAY_NAME, TRIP_PRODUCT_USER_FACING_TITLE, { type: "non_consumable" });
-  const playStoreTripProduct = await ensureProduct(playStoreApp, "Play Store [Trip Unlock]", PLAY_STORE_TRIP_PRODUCT_IDENTIFIER, false, TRIP_PRODUCT_DISPLAY_NAME, TRIP_PRODUCT_USER_FACING_TITLE, { type: "non_consumable" });
-  await addTestStorePrices(testStoreTripProduct.id, TRIP_PRODUCT_PRICES, "Trip Unlock");
-
-  // Day Unlock ($2.99) — one-time non-consumable
-  const testStoreDayProduct = await ensureProduct(app, "Test Store [Day Unlock]", DAY_PRODUCT_IDENTIFIER, true, DAY_PRODUCT_DISPLAY_NAME, DAY_PRODUCT_USER_FACING_TITLE, { type: "non_consumable" });
-  const appStoreDayProduct = await ensureProduct(appStoreApp, "App Store [Day Unlock]", DAY_PRODUCT_IDENTIFIER, false, DAY_PRODUCT_DISPLAY_NAME, DAY_PRODUCT_USER_FACING_TITLE, { type: "non_consumable" });
-  const playStoreDayProduct = await ensureProduct(playStoreApp, "Play Store [Day Unlock]", PLAY_STORE_DAY_PRODUCT_IDENTIFIER, false, DAY_PRODUCT_DISPLAY_NAME, DAY_PRODUCT_USER_FACING_TITLE, { type: "non_consumable" });
-  await addTestStorePrices(testStoreDayProduct.id, DAY_PRODUCT_PRICES, "Day Unlock");
-
-  let entitlement: Entitlement | undefined;
-  const { data: existingEntitlements, error: listEntitlementsError } = await listEntitlements({
-    client,
-    path: { project_id: project.id },
-    query: { limit: 20 },
-  });
-  if (listEntitlementsError) throw new Error("Failed to list entitlements");
-
-  const existingEntitlement = existingEntitlements.items?.find((e) => e.lookup_key === ENTITLEMENT_IDENTIFIER);
-  if (existingEntitlement) {
-    console.log("Entitlement exists:", existingEntitlement.id);
-    entitlement = existingEntitlement;
-  } else {
-    const { data: newEntitlement, error } = await createEntitlement({
-      client,
-      path: { project_id: project.id },
-      body: { lookup_key: ENTITLEMENT_IDENTIFIER, display_name: ENTITLEMENT_DISPLAY_NAME },
-    });
-    if (error) throw new Error("Failed to create entitlement");
-    console.log("Created entitlement:", newEntitlement.id);
-    entitlement = newEntitlement;
-  }
-
-  const { error: attachEntitlementError } = await attachProductsToEntitlement({
-    client,
-    path: { project_id: project.id, entitlement_id: entitlement.id },
-    body: {
-      product_ids: [
-        testStoreProduct.id, appStoreProduct.id, playStoreProduct.id,
-        testStoreYearlyProduct.id, appStoreYearlyProduct.id, playStoreYearlyProduct.id,
-        testStoreTripProduct.id, appStoreTripProduct.id, playStoreTripProduct.id,
-      ],
-    },
-  });
-  if (attachEntitlementError) {
-    if ((attachEntitlementError as any).type === "unprocessable_entity_error") {
-      console.log("Products already attached to entitlement");
-    } else {
-      throw new Error("Failed to attach products to entitlement");
-    }
-  } else {
-    console.log("Attached products to entitlement");
+  const appStoreBundle = (appStoreApp as any).app_store?.bundle_id;
+  if (appStoreBundle && appStoreBundle !== APP_STORE_BUNDLE_ID) {
+    console.warn(`!! App Store app in RevenueCat uses bundle ID ${appStoreBundle}; the app ships as ${APP_STORE_BUNDLE_ID}. Fix it in the RevenueCat dashboard.`);
   }
 
   let offering: Offering | undefined;
@@ -278,11 +186,9 @@ async function seedRevenueCat() {
     query: { limit: 20 },
   });
   if (listOfferingsError) throw new Error("Failed to list offerings");
-
-  const existingOffering = existingOfferings.items?.find((o) => o.lookup_key === OFFERING_IDENTIFIER);
-  if (existingOffering) {
-    console.log("Offering exists:", existingOffering.id);
-    offering = existingOffering;
+  offering = existingOfferings.items?.find((o) => o.lookup_key === OFFERING_IDENTIFIER);
+  if (offering) {
+    console.log("Offering exists:", offering.id);
   } else {
     const { data: newOffering, error } = await createOffering({
       client,
@@ -293,7 +199,6 @@ async function seedRevenueCat() {
     console.log("Created offering:", newOffering.id);
     offering = newOffering;
   }
-
   if (!offering.is_current) {
     const { error } = await updateOffering({
       client,
@@ -301,10 +206,9 @@ async function seedRevenueCat() {
       body: { is_current: true },
     });
     if (error) throw new Error("Failed to set offering as current");
-    console.log("Set offering as current");
+    console.log("Set offering as current (replaces the old subscription offering)");
   }
 
-  let pkg: Package | undefined;
   const { data: existingPackages, error: listPackagesError } = await listPackages({
     client,
     path: { project_id: project.id, offering_id: offering.id },
@@ -312,61 +216,32 @@ async function seedRevenueCat() {
   });
   if (listPackagesError) throw new Error("Failed to list packages");
 
-  const existingPackage = existingPackages.items?.find((p) => p.lookup_key === PACKAGE_IDENTIFIER);
-  if (existingPackage) {
-    console.log("Package exists:", existingPackage.id);
-    pkg = existingPackage;
-  } else {
-    const { data: newPackage, error } = await createPackages({
-      client,
-      path: { project_id: project.id, offering_id: offering.id },
-      body: { lookup_key: PACKAGE_IDENTIFIER, display_name: PACKAGE_DISPLAY_NAME },
-    });
-    if (error) throw new Error("Failed to create package");
-    console.log("Created package:", newPackage.id);
-    pkg = newPackage;
-  }
+  for (const u of UNLOCKS) {
+    const testProduct = await ensureProduct(app, `Test Store [${u.label}]`, u.identifier, true, u.label, u.title, { type: "consumable" });
+    const iosProduct = await ensureProduct(appStoreApp, `App Store [${u.label}]`, u.identifier, false, u.label, u.title, { type: "consumable" });
+    const androidProduct = await ensureProduct(playStoreApp, `Play Store [${u.label}]`, u.playIdentifier, false, u.label, u.title, { type: "consumable" });
+    await addTestStorePrices(testProduct.id, [...u.prices], u.label);
 
-  const attachToPackage = async (packageId: string, productIds: string[], label: string) => {
-    const { error } = await attachProductsToPackage({
-      client,
-      path: { project_id: project.id, package_id: packageId },
-      body: { products: productIds.map(id => ({ product_id: id, eligibility_criteria: "all" as const })) },
-    });
-    if (error) {
-      if ((error as any).type === "unprocessable_entity_error") {
-        console.log(label + " products already attached to package");
-      } else {
-        throw new Error("Failed to attach products to " + label + " package");
-      }
-    } else {
-      console.log("Attached products to " + label + " package");
+    let pkg: Package | undefined = existingPackages.items?.find((p) => p.lookup_key === u.packageKey);
+    if (!pkg) {
+      const { data: created, error } = await createPackages({
+        client,
+        path: { project_id: project.id, offering_id: offering.id },
+        body: { lookup_key: u.packageKey, display_name: u.title },
+      });
+      if (error) throw new Error("Failed to create " + u.label + " package: " + JSON.stringify(error));
+      pkg = created;
+      console.log("Created " + u.label + " package:", pkg.id);
     }
-  };
-
-  await attachToPackage(pkg.id, [testStoreProduct.id, appStoreProduct.id, playStoreProduct.id], "Monthly Plus");
-
-  const ensurePackage = async (lookupKey: string, displayName: string, label: string): Promise<Package> => {
-    const existing = existingPackages.items?.find((p) => p.lookup_key === lookupKey);
-    if (existing) { console.log(label + " package exists:", existing.id); return existing; }
-    const { data: created, error } = await createPackages({
+    const { error: attachError } = await attachProductsToPackage({
       client,
-      path: { project_id: project.id, offering_id: offering.id },
-      body: { lookup_key: lookupKey, display_name: displayName },
+      path: { project_id: project.id, package_id: pkg.id },
+      body: { products: [testProduct, iosProduct, androidProduct].map((p) => ({ product_id: p.id, eligibility_criteria: "all" as const })) },
     });
-    if (error) throw new Error("Failed to create " + label + " package: " + JSON.stringify(error));
-    console.log("Created " + label + " package:", created.id);
-    return created;
-  };
-
-  const annualPkg = await ensurePackage(ANNUAL_PACKAGE_IDENTIFIER, ANNUAL_PACKAGE_DISPLAY_NAME, "Yearly Pro");
-  await attachToPackage(annualPkg.id, [testStoreYearlyProduct.id, appStoreYearlyProduct.id, playStoreYearlyProduct.id], "Yearly Pro");
-
-  const tripPkg = await ensurePackage(TRIP_PACKAGE_IDENTIFIER, TRIP_PACKAGE_DISPLAY_NAME, "Trip Unlock");
-  await attachToPackage(tripPkg.id, [testStoreTripProduct.id, appStoreTripProduct.id, playStoreTripProduct.id], "Trip Unlock");
-
-  const dayPkg = await ensurePackage(DAY_PACKAGE_IDENTIFIER, DAY_PACKAGE_DISPLAY_NAME, "Day Unlock");
-  await attachToPackage(dayPkg.id, [testStoreDayProduct.id, appStoreDayProduct.id, playStoreDayProduct.id], "Day Unlock");
+    if (attachError && (attachError as any).type !== "unprocessable_entity_error") {
+      throw new Error("Failed to attach products to " + u.label + " package");
+    }
+  }
 
   const { data: testKeys } = await listAppPublicApiKeys({ client, path: { project_id: project.id, app_id: app.id } });
   const { data: iosKeys } = await listAppPublicApiKeys({ client, path: { project_id: project.id, app_id: appStoreApp.id } });
@@ -378,7 +253,7 @@ async function seedRevenueCat() {
   console.log("Test Store App ID:", app.id);
   console.log("App Store App ID:", appStoreApp.id);
   console.log("Play Store App ID:", playStoreApp.id);
-  console.log("Entitlement:", ENTITLEMENT_IDENTIFIER);
+  console.log("Offering:", OFFERING_IDENTIFIER);
   console.log("Public API Key - Test Store:", testKeys?.items[0]?.key ?? "N/A");
   console.log("Public API Key - iOS:", iosKeys?.items[0]?.key ?? "N/A");
   console.log("Public API Key - Android:", androidKeys?.items[0]?.key ?? "N/A");
