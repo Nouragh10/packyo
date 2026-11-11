@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { auth, db, equalTo, get, onValue, orderByChild, push, query, ref, set, update } from "@/lib/firebase";
 import { runTransaction } from "firebase/database";
 import { apiFetch } from "@/lib/api-client";
+import { track } from "@/lib/analytics";
 import { classifyActivity, keySegment, normalizeCity } from "@/lib/activity-classifier";
 
 /* ── Interfaces ───────────────────────────────────────────────────── */
@@ -1285,6 +1286,12 @@ export async function createTrip(data: {
   await addLocalTripId(data.uid, tripId);
 
   try { await set(ref(db, `userTrips/${data.uid}/${tripId}`), true); } catch {}
+  track("trip_created", {
+    has_destination: !!data.destination,
+    days: data.days,
+    budget: data.budget,
+    vibes: data.vibes.slice(0, 3).join(","),
+  });
   return tripId;
 }
 
@@ -1707,6 +1714,7 @@ export async function confirmDestination(tripId: string, name: string) {
     destinationLockedBy: null,
     aiDestinationDecision: null,
   });
+  track("destination_picked", { by: "vote", destination: name.slice(0, 100) });
 }
 
 export async function chooseDestinationWithAi(
@@ -1724,6 +1732,7 @@ export async function chooseDestinationWithAi(
       decidedAt: new Date().toISOString(),
     },
   });
+  track("destination_picked", { by: "ai_tiebreak", destination: name.slice(0, 100) });
 }
 
 export async function clearDestinationSuggestions(tripId: string) {
@@ -1756,6 +1765,8 @@ export async function sendMessage(
 
 export async function saveItinerary(tripId: string, itinerary: unknown) {
   await set(ref(db, `trips/${tripId}/itinerary`), itinerary);
+  const days = (itinerary as { days?: unknown[] } | null)?.days?.length;
+  track("itinerary_generated", { days });
 }
 
 /* ── Packing list ─────────────────────────────────────────────────── */
@@ -1882,6 +1893,7 @@ export async function confirmAccommodation(
     accommodationVotes: null,
     accommodationLockedBy: null,
   });
+  track("stay_chosen");
 }
 
 /* ── Activity CRUD ────────────────────────────────────────────────── */
@@ -2024,6 +2036,7 @@ export async function wipeUserData(uid: string) {
 
 export async function confirmPack(tripId: string) {
   await update(ref(db, `trips/${tripId}`), { packConfirmed: true });
+  track("pack_confirmed");
 }
 
 export async function setTripPremium(tripId: string) {

@@ -12,7 +12,8 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_DOMAIN": "packyo.replit.app",
-        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "107013969008-b0tr74s0pu8sb7eof11sroj2l3uang3h.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "107013969008-b0tr74s0pu8sb7eof11sroj2l3uang3h.apps.googleusercontent.com",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_TpChkzeVfHKWaCrTPbAyXPWgZHl"
       }
     },
     "production": {
@@ -23,7 +24,8 @@
         "EXPO_PUBLIC_DOMAIN": "packyo.replit.app",
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "107013969008-b0tr74s0pu8sb7eof11sroj2l3uang3h.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "107013969008-asl7e652vccbm8dtum8v4ln4acufj2s0.apps.googleusercontent.com",
-        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "107013969008-529820uttubpthf47mkps5sc0g1k8p29.apps.googleusercontent.com"
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "107013969008-529820uttubpthf47mkps5sc0g1k8p29.apps.googleusercontent.com",
+        "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_TpChkzeVfHKWaCrTPbAyXPWgZHl"
       },
       "environment": "production"
     }

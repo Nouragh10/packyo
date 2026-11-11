@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { joinTrip } from "@/hooks/useFirebase";
+import { track } from "@/lib/analytics";
 
 export default function JoinScreen() {
   const colors = useColors();
@@ -50,6 +51,7 @@ export default function JoinScreen() {
         user.uid,
         user.displayName ?? "Traveler",
       );
+      track("trip_joined");
       router.replace(`/trip/${tripId}`);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Trip not found.";

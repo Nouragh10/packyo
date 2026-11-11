@@ -30,6 +30,15 @@ import {
   signOut,
   updateCurrentUserProfile,
 } from "@/lib/firebase";
+import { track, trackLogin, trackSignUp } from "@/lib/analytics";
+
+// New account if Firebase created it within the last minute of this sign-in.
+const logAuth = (method: "email" | "apple" | "google") => {
+  const m = auth.currentUser?.metadata;
+  const isNew = !!m?.creationTime && !!m?.lastSignInTime &&
+    Math.abs(Date.parse(m.lastSignInTime) - Date.parse(m.creationTime)) < 60_000;
+  (isNew ? trackSignUp : trackLogin)(method);
+};
 import { apiFetch } from "@/lib/api-client";
 import { GoPackIcon } from "@/components/GoPackLogo";
 import colors from "@/constants/colors";
@@ -115,6 +124,7 @@ export default function SignInScreen() {
       setError("");
       try {
         await signInWithGoogleCredential(idToken, accessToken);
+        logAuth("google");
         router.replace("/(tabs)");
       } catch (e: any) {
         setError(e?.message ?? "Google sign-in failed. Please try again.");
@@ -164,12 +174,15 @@ export default function SignInScreen() {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       if (mode === "signup") {
         await signUpWithEmail(email.trim(), password, name.trim());
+        trackSignUp("email");
         setMode("verify");
       } else {
         const cred = await signInWithEmail(email.trim(), password);
         if (!cred.user.emailVerified) {
+          track("email_unverified_login");
           setMode("verify");
         } else {
+          trackLogin("email");
           router.replace("/(tabs)");
         }
       }
@@ -208,6 +221,7 @@ export default function SignInScreen() {
     try {
       const cred = await signInWithEmail(email.trim(), password);
       if (cred.user.emailVerified) {
+        track("email_verified");
         router.replace("/(tabs)");
       } else {
         await signOut();
@@ -246,6 +260,7 @@ export default function SignInScreen() {
     try {
       if (Platform.OS === "web") {
         await signInWithApplePopup();
+        logAuth("apple");
         router.replace("/(tabs)");
         return;
       }
@@ -300,6 +315,7 @@ export default function SignInScreen() {
         await updateCurrentUserProfile(appleName).catch(() => undefined);
       }
 
+      logAuth("apple");
       router.replace("/(tabs)");
     } catch (e: any) {
       if (e?.code !== "ERR_REQUEST_CANCELED") {
