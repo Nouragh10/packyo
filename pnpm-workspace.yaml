@@ -171,3 +171,8 @@ allowBuilds:
   '@firebase/util': false
   esbuild: true
   protobufjs: false
+
+# Replit has pnpm 10; let it run as-is instead of trying to self-install the
+# pnpm version in package.json "packageManager" (that loops forever there).
+# EAS pins its own pnpm in eas.json, so builds there still use 11.9.0.
+managePackageManagerVersions: false
