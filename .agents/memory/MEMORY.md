@@ -19,6 +19,7 @@
 - [Redo activity compatibility](redo-activity-compatibility.md) — support legacy response wrappers and itineraries without a day-level city during mobile rollouts.
 - [iOS itinerary exports](ios-itinerary-exports.md) — close native export sheets before launching share UI; use SDK-matched file modules and Apple’s ICS type.
 - [Firebase 12 React Native persistence](firebase12-rn-auth-persistence.md) — Metro’s native auth export and TypeScript’s web-facing declarations differ; verify native bundles.
+- [Firebase SDK consistency](firebase-sdk-consistency.md) — native analytics can introduce another Firebase app registry; align SDK versions and verify startup.
 - [Narrow Firebase activity transactions](firebase-activity-transactions.md) — transact on one day’s activities, not the whole trip, to avoid false itinerary conflicts.
 - [Firebase list normalization](firebase-list-normalization.md) — itinerary days and activities may be arrays or keyed objects; preserve child keys and keep transaction IDs deterministic.
 - [Video zero-position utilities](video-zero-position-utilities.md) — verify compiled zero-position CSS; missing inset-0 can silently collapse every animated scene.
