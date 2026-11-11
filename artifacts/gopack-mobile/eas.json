@@ -17,6 +17,7 @@
       }
     },
     "production": {
+      "pnpm": "11.9.0",
       "autoIncrement": true,
       "env": {
         "EAS_BUILD_SKIP_LOCKFILE_CHECK": "1",
@@ -27,7 +28,8 @@
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "107013969008-529820uttubpthf47mkps5sc0g1k8p29.apps.googleusercontent.com",
         "EXPO_PUBLIC_REVENUECAT_IOS_API_KEY": "appl_TpChkzeVfHKWaCrTPbAyXPWgZHl"
       },
-      "environment": "production"
+      "environment": "production",
+      "node": "22.14.0"
     }
   }
 }
