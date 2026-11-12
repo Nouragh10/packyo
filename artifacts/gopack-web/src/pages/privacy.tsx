@@ -41,10 +41,7 @@ export default function Privacy() {
       <p>Trip content is visible to the other members of the same trip, since Packyo is built for group planning. Trip reviews you choose to make public, including their photos and the first names of the trip's members, may be visible to other Packyo users.</p>
 
       <h3 style={h3}>Purchase Information</h3>
-      <ul style={ul}>
-        <li><strong>iOS app:</strong> itinerary unlocks (unlocking a trip's full itinerary for the whole group or just for yourself) are processed by Apple through the App Store and verified by <strong>RevenueCat</strong>, which receives transaction details from Apple on our behalf. We do not see or store your payment card details.</li>
-        <li><strong>Web (packyo.app):</strong> purchases made on the website are processed by <strong>Paddle.com</strong>, our Merchant of Record, which handles your payment details. We do not see or store your payment card details.</li>
-      </ul>
+      <p>Purchases in Packyo, such as unlocking a trip's full itinerary for the whole group or just for yourself, are made in the iOS app. They are processed by Apple through the App Store and verified by <strong>RevenueCat</strong>, which receives transaction details from Apple on our behalf. We do not see or store your payment card details.</p>
       <p>We store which trips are unlocked, by whom, and when, so we can give you and your group access to what was purchased.</p>
 
       <h3 style={h3}>Usage &amp; Device Information (Analytics)</h3>
@@ -70,7 +67,6 @@ export default function Privacy() {
         <li><strong>Firebase (Google)</strong>: sign-in, database, photo storage, and analytics</li>
         <li><strong>Apple</strong>: Sign in with Apple, App Store purchases, and push notifications</li>
         <li><strong>RevenueCat</strong>: verifying iOS in-app purchases</li>
-        <li><strong>Paddle</strong>: payment processing for purchases on the website (Merchant of Record)</li>
         <li><strong>Anthropic</strong>: trip details (such as destination, dates, budget, and group wishes) are sent to generate AI itineraries and packing lists. This data is used only to produce your results and is not used to train AI models.</li>
         <li><strong>Resend</strong>: sending account emails, such as email confirmation</li>
         <li><strong>Expo</strong>: delivering push notifications to the app</li>
@@ -88,7 +84,7 @@ export default function Privacy() {
         <li>Public trip reviews you wrote</li>
       </ul>
       <p>Messages or other content you added to a trip hosted by someone else may remain visible to that trip's members. You can also ask us to delete your data by emailing <a href="mailto:support@gopack.now" style={link}>support@gopack.now</a>.</p>
-      <p>Records of purchases may be kept as long as required for accounting and legal purposes. Apple, RevenueCat, and Paddle keep their own records of transactions under their own policies.</p>
+      <p>Records of purchases may be kept as long as required for accounting and legal purposes. Apple and RevenueCat keep their own records of transactions under their own policies.</p>
 
       <h2 style={h2}>5. Your Choices</h2>
       <ul style={ul}>
