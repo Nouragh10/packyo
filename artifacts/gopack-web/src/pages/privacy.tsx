@@ -1,3 +1,8 @@
+const h2 = { fontSize: 20, marginTop: 36, marginBottom: 10 } as const;
+const h3 = { fontSize: 16, marginTop: 20, marginBottom: 6 } as const;
+const ul = { paddingLeft: 22 } as const;
+const link = { color: "#E85D3A" } as const;
+
 export default function Privacy() {
   return (
     <div style={{
@@ -9,75 +14,104 @@ export default function Privacy() {
       color: "#1a1a1a",
     }}>
       <h1 style={{ fontSize: 28, marginBottom: 4 }}>Privacy Policy</h1>
-      <p style={{ color: "#777", fontSize: 14, marginBottom: 32 }}>Last updated: July 12, 2026</p>
+      <p style={{ color: "#777", fontSize: 14, marginBottom: 32 }}>Last updated: November 12, 2026</p>
 
-      <p>gopack.now ("gopack," "we," "us," or "our") provides a collaborative group travel planning app. This policy explains what information we collect, how we use it, and your choices.</p>
+      <p>Packyo ("Packyo," "we," "us," or "our") provides a collaborative group travel planning app for iOS and the web at packyo.app. This policy explains what information we collect, how we use it, who we share it with, and the choices you have.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>1. Information We Collect</h2>
+      <h2 style={h2}>1. Information We Collect</h2>
 
-      <h3 style={{ fontSize: 16, marginTop: 20, marginBottom: 6 }}>Account Information</h3>
-      <p>When you sign up, we use Firebase Authentication to manage your account. This includes your name, email address, and (if you sign in with Google) your Google profile name and photo.</p>
+      <h3 style={h3}>Account Information</h3>
+      <p>We use Firebase Authentication to manage your account. Depending on how you sign up, this includes:</p>
+      <ul style={ul}>
+        <li><strong>Email sign-up:</strong> your name, email address, and password (stored securely by Firebase; we never see it). We send you an email to confirm your address.</li>
+        <li><strong>Sign in with Apple:</strong> the name and email address Apple shares with us. If you choose "Hide My Email," we receive a private relay address instead of your real email.</li>
+        <li><strong>Sign in with Google:</strong> your Google profile name, email address, and profile photo.</li>
+      </ul>
 
-      <h3 style={{ fontSize: 16, marginTop: 20, marginBottom: 6 }}>Trip &amp; Usage Data</h3>
-      <p>We store the information you create while using the app in Firebase Realtime Database, including:</p>
-      <ul style={{ paddingLeft: 22 }}>
-        <li>Trips you create or join, including destinations, dates, and trip names</li>
-        <li>Wishlist items, votes, and chat messages shared with your trip group</li>
+      <h3 style={h3}>Trip Content You Create</h3>
+      <p>We store the information you create while using Packyo in Firebase, including:</p>
+      <ul style={ul}>
+        <li>Trips you create or join, including destinations, dates, budget, and trip names</li>
+        <li>Wishes, votes, chat messages, stays, and expenses shared with your trip group</li>
         <li>Itineraries and packing lists generated for your trips</li>
-        <li>Your membership and role within a trip (e.g. host or guest)</li>
+        <li>Your membership and role within a trip (for example, host or member)</li>
+        <li>Photos you choose to upload, such as a profile photo or photos in a trip review</li>
+        <li>Trip reviews, saved activities, and saved stays</li>
       </ul>
-      <p>This information is visible to other members of the same trip, since the app is designed for group collaboration.</p>
+      <p>Trip content is visible to the other members of the same trip, since Packyo is built for group planning. Trip reviews you choose to make public, including their photos and the first names of the trip's members, may be visible to other Packyo users.</p>
 
-      <h3 style={{ fontSize: 16, marginTop: 20, marginBottom: 6 }}>Purchase Information</h3>
-      <p>If you subscribe to GoPackNow Plus, your purchase is handled by one of the following processors depending on the platform you use:</p>
-      <ul style={{ paddingLeft: 22 }}>
-        <li><strong>Mobile app (iOS):</strong> In-app purchases are processed through Apple's App Store and managed by <strong>RevenueCat</strong>. RevenueCat receives transaction data from Apple on our behalf to verify and manage your subscription. We do not see or store your payment card details.</li>
-        <li><strong>Web (gopack.now):</strong> Subscriptions purchased on the website are processed by <strong>Paddle.com</strong>, our Merchant of Record. Paddle receives your payment details and transaction information. We do not see or store your payment card details — these are handled entirely by Paddle.</li>
+      <h3 style={h3}>Purchase Information</h3>
+      <ul style={ul}>
+        <li><strong>iOS app:</strong> itinerary unlocks (unlocking a trip's full itinerary for the whole group or just for yourself) are processed by Apple through the App Store and verified by <strong>RevenueCat</strong>, which receives transaction details from Apple on our behalf. We do not see or store your payment card details.</li>
+        <li><strong>Web (packyo.app):</strong> purchases made on the website are processed by <strong>Paddle.com</strong>, our Merchant of Record, which handles your payment details. We do not see or store your payment card details.</li>
       </ul>
-      <p>In both cases, we store your subscription status (active/canceled) and renewal date in our database solely to manage your access to premium features.</p>
+      <p>We store which trips are unlocked, by whom, and when, so we can give you and your group access to what was purchased.</p>
 
-      <h3 style={{ fontSize: 16, marginTop: 20, marginBottom: 6 }}>Device &amp; Diagnostic Information</h3>
-      <p>We may collect basic technical information such as app version, device type, and crash/error logs to help us fix bugs and improve the app.</p>
+      <h3 style={h3}>Usage &amp; Device Information (Analytics)</h3>
+      <p>In the iOS app we use <strong>Google Analytics for Firebase</strong> to understand how Packyo is used and to improve it. This includes events such as signing up, creating a trip, generating an itinerary, viewing the unlock screen, and the screens you open, together with device information (such as device model, operating system, app version, and approximate country) and an app-specific analytics identifier. Analytics data is linked to an internal account ID so we can understand how people use Packyo, but it is not used for advertising, it is not combined with data from other companies' apps, and we do not collect your device's advertising identifier (IDFA).</p>
+      <p>We may also collect crash and error logs to help us fix bugs.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>2. How We Use Your Information</h2>
-      <ul style={{ paddingLeft: 22 }}>
-        <li>To operate the core functionality of the app — creating trips, syncing wishlists, generating itineraries</li>
-        <li>To verify and manage purchases and subscriptions</li>
-        <li>To communicate with you about your account or trips (e.g. notifications when someone joins your trip)</li>
-        <li>To maintain, debug, and improve the app</li>
+      <h3 style={h3}>Notifications</h3>
+      <p>If you allow notifications, we store a push notification token for your device, delivered through Expo and Apple Push Notification service, so we can tell you about activity in your trips (for example, when someone joins or votes). You can turn notifications off at any time in your iPhone's Settings.</p>
+
+      <h2 style={h2}>2. How We Use Your Information</h2>
+      <ul style={ul}>
+        <li>To run Packyo: creating and syncing trips, voting, chat, and generating itineraries and packing lists</li>
+        <li>To verify purchases and unlock content you or your group paid for</li>
+        <li>To send account emails (such as confirming your email address) and trip notifications</li>
+        <li>To understand usage, fix problems, and improve the app</li>
+        <li>To keep Packyo secure and prevent abuse</li>
+      </ul>
+      <p>We do not sell your personal information, and we do not use it for third-party advertising.</p>
+
+      <h2 style={h2}>3. Who We Share Information With</h2>
+      <p>We share data only with the service providers we need to run Packyo:</p>
+      <ul style={ul}>
+        <li><strong>Firebase (Google)</strong>: sign-in, database, photo storage, and analytics</li>
+        <li><strong>Apple</strong>: Sign in with Apple, App Store purchases, and push notifications</li>
+        <li><strong>RevenueCat</strong>: verifying iOS in-app purchases</li>
+        <li><strong>Paddle</strong>: payment processing for purchases on the website (Merchant of Record)</li>
+        <li><strong>Anthropic</strong>: trip details (such as destination, dates, budget, and group wishes) are sent to generate AI itineraries and packing lists. This data is used only to produce your results and is not used to train AI models.</li>
+        <li><strong>Resend</strong>: sending account emails, such as email confirmation</li>
+        <li><strong>Expo</strong>: delivering push notifications to the app</li>
+        <li><strong>Replit</strong>: hosting our website and servers</li>
+      </ul>
+      <p>Packyo may show links to third-party sites such as Booking.com or Expedia for stays and activities. If you open those links, the third party's own privacy policy applies to anything you do there.</p>
+      <p>We may also disclose information if required by law or to protect the rights and safety of our users and Packyo.</p>
+
+      <h2 style={h2}>4. Data Retention &amp; Deletion</h2>
+      <p>We keep your account and trip data for as long as your account is active. You can delete your account at any time in the app under <strong>Profile → Settings → Delete account</strong>. When you do, we delete:</p>
+      <ul style={ul}>
+        <li>Your sign-in account, profile photo, saved activities and stays, and notification tokens</li>
+        <li>Trips you host, along with everything in them</li>
+        <li>Your membership, reviews, and unlock records in trips hosted by other people</li>
+        <li>Public trip reviews you wrote</li>
+      </ul>
+      <p>Messages or other content you added to a trip hosted by someone else may remain visible to that trip's members. You can also ask us to delete your data by emailing <a href="mailto:support@gopack.now" style={link}>support@gopack.now</a>.</p>
+      <p>Records of purchases may be kept as long as required for accounting and legal purposes. Apple, RevenueCat, and Paddle keep their own records of transactions under their own policies.</p>
+
+      <h2 style={h2}>5. Your Choices</h2>
+      <ul style={ul}>
+        <li>Edit or delete trip content you've created directly in the app</li>
+        <li>Turn notifications on or off in your iPhone's Settings</li>
+        <li>Delete your account in the app, or request a copy or deletion of your data by emailing us</li>
+        <li>View your App Store purchases and request refunds through Apple at reportaproblem.apple.com</li>
       </ul>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>3. How We Share Your Information</h2>
-      <p>We do not sell your personal information. We share data only with the service providers necessary to run the app:</p>
-      <ul style={{ paddingLeft: 22 }}>
-        <li><strong>Firebase (Google)</strong> — authentication and data storage</li>
-        <li><strong>RevenueCat</strong> — mobile in-app purchase verification and subscription management (iOS app)</li>
-        <li><strong>Paddle</strong> — subscription billing and payment processing for the website (Merchant of Record)</li>
-        <li><strong>Anthropic</strong> — trip details are sent to generate AI itineraries and packing lists; this data is used only to generate your results and is not used to train AI models</li>
-      </ul>
-      <p>Trip content (wishlist items, votes, chat, itinerary) is shared with the other members of that specific trip, since that's the point of the app.</p>
+      <h2 style={h2}>6. Security</h2>
+      <p>We use industry-standard services (Firebase, Apple, and our other providers) to protect your information, and we limit access to it. No method of storage or transmission is completely secure, but we work to protect your data.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>4. Data Retention &amp; Deletion</h2>
-      <p>We retain your account and trip data for as long as your account is active. You can request deletion of your account and associated data at any time by contacting us at <a href="mailto:support@gopack.now" style={{ color: "#E85D3A" }}>support@gopack.now</a>.</p>
+      <h2 style={h2}>7. Children's Privacy</h2>
+      <p>Packyo is not directed at children under 13, and we do not knowingly collect personal information from children under 13. If you believe a child has given us personal information, contact us and we will delete it.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>5. Your Choices</h2>
-      <ul style={{ paddingLeft: 22 }}>
-        <li>You can edit or delete trip content you've created directly in the app</li>
-        <li>You can manage or cancel subscriptions through your Apple ID account settings</li>
-        <li>You can request a copy of your data or full account deletion by emailing us</li>
-      </ul>
+      <h2 style={h2}>8. Changes to This Policy</h2>
+      <p>We may update this policy as Packyo evolves. When we do, we'll update the "Last updated" date above.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>6. Children's Privacy</h2>
-      <p>gopack.now is not directed at children under 13, and we do not knowingly collect personal information from children under 13.</p>
-
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>7. Changes to This Policy</h2>
-      <p>We may update this policy as the app evolves. We'll update the "Last updated" date above when changes are made.</p>
-
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>8. Contact Us</h2>
+      <h2 style={h2}>9. Contact Us</h2>
       <div style={{ background: "#f7f7f7", borderRadius: 10, padding: "16px 20px", marginTop: 12 }}>
         <p style={{ margin: 0 }}>Questions about this policy or your data?</p>
         <p style={{ margin: "4px 0 0" }}>
-          <a href="mailto:support@gopack.now" style={{ color: "#E85D3A" }}>support@gopack.now</a>
+          <a href="mailto:support@gopack.now" style={link}>support@gopack.now</a>
         </p>
       </div>
     </div>
