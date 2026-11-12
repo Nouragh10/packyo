@@ -1,10 +1,10 @@
 "use client";
 import {
   require_react
-} from "./chunk-V4PAHK2W.js";
+} from "./chunk-YDFB6OGO.js";
 import {
   __toESM
-} from "./chunk-PR4QN5HX.js";
+} from "./chunk-ZPWHCABL.js";
 
 // ../../node_modules/.pnpm/@vercel+analytics@2.0.1_react@19.1.0/node_modules/@vercel/analytics/dist/react/index.mjs
 var import_react = __toESM(require_react(), 1);

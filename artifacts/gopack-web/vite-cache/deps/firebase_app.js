@@ -1,6 +1,5 @@
 import {
   DEFAULT_ENTRY_NAME,
-  FirebaseError,
   SDK_VERSION,
   _addComponent,
   _addOrOverwriteComponent,
@@ -22,8 +21,11 @@ import {
   onLog,
   registerVersion,
   setLogLevel
-} from "./chunk-BONB3HTN.js";
-import "./chunk-PR4QN5HX.js";
+} from "./chunk-ESFJGAWI.js";
+import {
+  FirebaseError
+} from "./chunk-RVSWSAJX.js";
+import "./chunk-ZPWHCABL.js";
 
 // ../../node_modules/.pnpm/firebase@12.15.0_@react-native-async-storage+async-storage@2.2.0_react-native@0.81.5_@b_de927daa0d1797c65faf28a6ef8ae8af/node_modules/firebase/app/dist/esm/index.esm.js
 var name = "firebase";

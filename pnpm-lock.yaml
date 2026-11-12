@@ -158,6 +158,8 @@ overrides:
   markdown-it: '>=14.2.0'
   '@babel/core': '>=7.29.6'
 
+packageExtensionsChecksum: sha256-H6srYfbg7KWpxtQS7jxCFHcPhSpUkMVg34tG24rFdzw=
+
 importers:
 
   .:
@@ -8424,6 +8426,7 @@ snapshots:
 
   '@firebase/database@1.1.4':
     dependencies:
+      '@firebase/app': 0.16.0
       '@firebase/app-check-interop-types': 0.3.4
       '@firebase/auth-interop-types': 0.2.5
       '@firebase/component': 0.7.4
