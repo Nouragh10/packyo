@@ -4,24 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, LogOut, User, Mail, Edit2, Check, X, Loader2, MapPin, Users, ChevronDown, CreditCard, FileText, Shield, RotateCcw, ExternalLink } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useTrips } from "@/hooks/useFirebase";
-import { useUserPremium } from "@/hooks/usePremium";
 import { updateProfile } from "firebase/auth";
 import { ref, update } from "firebase/database";
 import { auth, db } from "@/lib/firebase";
-
-async function openBillingPortal(user: import("firebase/auth").User): Promise<void> {
-  const token = await user.getIdToken();
-  const res = await fetch("/api/paddle/portal", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "Could not open billing portal");
-  }
-  const { url } = await res.json();
-  window.open(url, "_blank", "noopener,noreferrer");
-}
+import { APP_STORE_URL } from "@/lib/unlocks";
 
 const AVATAR_COLORS = ["#E85D3A", "#7F77DD", "#1D9E75", "#378ADD", "#BA7517", "#C4448A"];
 const VIBE_LABELS: Record<string, string> = {
@@ -39,15 +25,11 @@ export default function Profile() {
   const { user, signOut } = useAuth();
   const [, setLocation] = useLocation();
   const { trips, loading: tripsLoading } = useTrips();
-  const { premium, loading: premiumLoading } = useUserPremium();
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.displayName || "");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [tripsExpanded, setTripsExpanded] = useState(false);
-  const [subscriptionExpanded, setSubscriptionExpanded] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
-  const [portalError, setPortalError] = useState("");
 
   const handleSignOut = async () => {
     await signOut();
@@ -262,121 +244,28 @@ export default function Profile() {
             </div>
           )}
 
-          {/* Subscription */}
+          {/* Purchases */}
           {!isAnonymous && (
-            <div className="border border-border rounded-2xl overflow-hidden bg-background">
-              <button
-                onClick={() => setSubscriptionExpanded(e => !e)}
-                className="w-full flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors text-left"
-                data-testid="button-expand-subscription"
+            <div className="border border-border rounded-2xl bg-background px-5 py-4" data-testid="purchases-card">
+              <div className="flex items-center gap-3 mb-2">
+                <CreditCard size={16} className="text-muted-foreground" />
+                <span className="text-sm font-medium">Purchases</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Unlock a trip&apos;s full itinerary in the Packyo iOS app: $3.99 for the whole group or $2.99 just for you. One-time per trip, paid through Apple, no subscription.
+              </p>
+              <a
+                href={APP_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 flex items-center justify-center gap-2 w-full border border-border py-3 rounded-full text-sm font-medium text-foreground hover:bg-muted/50 transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <CreditCard size={16} className="text-muted-foreground" />
-                  <div>
-                    <p className="text-sm font-medium">Manage subscription</p>
-                    <p className="text-xs text-muted-foreground">
-                      {premiumLoading ? "Loading…" : premium?.active ? (
-                        premium.cancelAtPeriodEnd
-                          ? `GoPackNow Plus · Cancels ${premium.currentPeriodEnd ? new Date(premium.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "at period end"}`
-                          : `GoPackNow Plus · Renews ${premium.currentPeriodEnd ? new Date(premium.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : ""}`
-                      ) : "Starter plan"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {!premiumLoading && premium?.active && (
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary">Plus</span>
-                  )}
-                  <motion.div animate={{ rotate: subscriptionExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                    <ChevronDown size={16} className="text-muted-foreground" />
-                  </motion.div>
-                </div>
-              </button>
-
-              <AnimatePresence>
-                {subscriptionExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="overflow-hidden border-t border-border"
-                  >
-                    <div className="px-5 py-5 flex flex-col gap-4">
-                      {premium?.active ? (
-                        <>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-muted-foreground">Current plan</span>
-                            <span className="font-medium">GoPackNow Plus</span>
-                          </div>
-                          {premium.currentPeriodEnd && (
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">{premium.cancelAtPeriodEnd ? "Access until" : "Next renewal"}</span>
-                              <span className="font-medium">
-                                {new Date(premium.currentPeriodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
-                              </span>
-                            </div>
-                          )}
-                          {premium.cancelAtPeriodEnd ? (
-                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                              Your subscription is set to cancel. You&apos;ll keep Plus access until the date above.
-                            </div>
-                          ) : (
-                            <>
-                              <div className="bg-muted/40 rounded-xl p-4 text-sm">
-                                <p className="font-medium mb-2 text-foreground">How to cancel your subscription</p>
-                                <ol className="list-decimal list-inside flex flex-col gap-1.5 text-muted-foreground">
-                                  <li>Click <strong className="text-foreground">"Go to billing portal"</strong> below</li>
-                                  <li>Sign in with the email you used to subscribe</li>
-                                  <li>Find your GoPackNow Plus subscription and click <strong className="text-foreground">Cancel</strong></li>
-                                  <li>You&apos;ll keep Plus access until the end of the current period</li>
-                                </ol>
-                              </div>
-                              <button
-                                onClick={async () => {
-                                  setPortalError("");
-                                  setPortalLoading(true);
-                                  try {
-                                    await openBillingPortal(user);
-                                  } catch (err: any) {
-                                    setPortalError(err.message ?? "Could not open billing portal");
-                                  } finally {
-                                    setPortalLoading(false);
-                                  }
-                                }}
-                                disabled={portalLoading}
-                                className="flex items-center justify-center gap-2 w-full border border-border py-3 rounded-full text-sm font-medium text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
-                                data-testid="button-paddle-portal"
-                              >
-                                {portalLoading ? <Loader2 size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                                {portalLoading ? "Opening portal…" : "Go to billing portal"}
-                              </button>
-                              {portalError && (
-                                <p className="text-xs text-destructive text-center">{portalError}</p>
-                              )}
-                            </>
-                          )}
-                          <p className="text-xs text-muted-foreground text-center">
-                            Need help?{" "}
-                            <a href="mailto:support@gopack.now" className="text-primary underline">support@gopack.now</a>
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-sm text-muted-foreground">You&apos;re on the starter plan. Upgrade to GoPackNow Plus to unlock unlimited AI generations and up to 20 trip members.</p>
-                          <Link
-                            href="/pricing"
-                            className="flex items-center justify-center gap-2 w-full bg-primary text-white py-3 rounded-full text-sm font-medium hover:bg-primary/90 transition-colors"
-                            data-testid="link-upgrade"
-                          >
-                            View Plus plans
-                          </Link>
-                        </>
-                      )}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                <ExternalLink size={14} /> Open Packyo on the App Store
+              </a>
+              <p className="text-xs text-muted-foreground text-center mt-3">
+                Need help?{" "}
+                <a href="mailto:support@gopack.now" className="text-primary underline">support@gopack.now</a>
+              </p>
             </div>
           )}
 
@@ -404,7 +293,7 @@ export default function Profile() {
               data-testid="link-refunds"
             >
               <RotateCcw size={16} className="text-muted-foreground shrink-0" />
-              <span className="text-sm">Refund &amp; Cancellation Policy</span>
+              <span className="text-sm">Refund Policy</span>
             </Link>
           </div>
 

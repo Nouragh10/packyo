@@ -189,9 +189,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.104.2
         version: 0.104.2(zod@3.25.76)
-      '@paddle/paddle-node-sdk':
-        specifier: ^3.8.0
-        version: 3.8.0
       '@workspace/activity-pricing':
         specifier: workspace:*
         version: link:../../lib/activity-pricing
@@ -2063,10 +2060,6 @@ packages:
 
   '@orval/zod@8.9.1':
     resolution: {integrity: sha512-MV75Xzz28W3ZttloNNmdTPa96AneY8FZExEwxmcySdY7lirJtErsqXt2EHnorETDAVEvSldVszhWG/AXpFBAPg==}
-
-  '@paddle/paddle-node-sdk@3.8.0':
-    resolution: {integrity: sha512-4RS6AhZisloYaT2jiFgx9hwm22qwLRUx4EgIVb1gS3bS96lhDBQWq8BC1/Zow2i3CuxMkehXQUc3qKSBS77ozA==}
-    engines: {node: '>=20'}
 
   '@pdf-lib/standard-fonts@1.0.0':
     resolution: {integrity: sha512-hU30BK9IUN/su0Mn9VdlVKsWBS6GyhVfqjwl1FjZN4TxP6cCw0jP2w7V3Hf5uX7M0AZJ16vey9yE0ny7Sa59ZA==}
@@ -8947,8 +8940,6 @@ snapshots:
       - '@faker-js/faker'
       - supports-color
       - typescript
-
-  '@paddle/paddle-node-sdk@3.8.0': {}
 
   '@pdf-lib/standard-fonts@1.0.0':
     dependencies:

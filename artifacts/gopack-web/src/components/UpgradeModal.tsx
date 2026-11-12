@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Sparkles, X, Check } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { SiApple } from "react-icons/si";
+import { APP_STORE_URL, UNLOCK_OPTIONS } from "@/lib/unlocks";
 
 interface Props {
   open: boolean;
@@ -10,50 +10,8 @@ interface Props {
   onClose: () => void;
 }
 
-const FEATURES = [
-  "One purchase unlocks for everyone in the trip",
-  "Unlimited AI itinerary regenerations",
-  "Up to 20 activity redos",
-  "Unlimited packing list regenerations",
-  "Styled PDF export",
-  "Google Calendar sync for all activities",
-];
-
-type Plan = "monthly" | "yearly";
-
-export function UpgradeModal({ open, reason, tripId, onClose }: Props) {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [plan, setPlan] = useState<Plan>("yearly");
-
-  const handleUpgrade = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/paddle/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tripId,
-          plan,
-          uid: user?.uid ?? "",
-          email: user?.email ?? undefined,
-          returnUrl: `${window.location.origin}/trip/${tripId}?upgraded=1`,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as any).error || "Could not start checkout");
-      }
-      const { url } = await res.json() as { url: string };
-      window.location.href = url;
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
-      setLoading(false);
-    }
-  };
-
+// Unlocks are sold through the App Store only, so the web points people to the app.
+export function UpgradeModal({ open, reason, onClose }: Props) {
   return (
     <AnimatePresence>
       {open && (
@@ -78,6 +36,7 @@ export function UpgradeModal({ open, reason, tripId, onClose }: Props) {
               <button
                 onClick={onClose}
                 className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-muted/60 text-muted-foreground transition-colors"
+                aria-label="Close"
               >
                 <X size={18} />
               </button>
@@ -87,65 +46,39 @@ export function UpgradeModal({ open, reason, tripId, onClose }: Props) {
               </div>
 
               {reason && (
-                <p className="text-xs font-semibold text-primary/70 uppercase tracking-widest mb-1.5">
-                  {reason}
-                </p>
+                <p className="text-xs font-semibold text-primary/70 uppercase tracking-widest mb-1.5">{reason}</p>
               )}
 
-              <h2 className="font-serif text-2xl font-bold mb-1 leading-tight">
-                Upgrade this Pack
-              </h2>
-              <p className="text-primary text-xs font-semibold mb-4">
-                🎉 One purchase unlocks for everyone on this trip
+              <h2 className="font-serif text-2xl font-bold mb-1 leading-tight">Unlock the whole trip</h2>
+              <p className="text-sm text-muted-foreground mb-5">
+                Day 1 is free. Unlock every day of the itinerary in the Packyo app.
               </p>
 
-              <div className="grid grid-cols-2 gap-2.5 mb-5">
-                <button
-                  onClick={() => setPlan("monthly")}
-                  className={`relative rounded-2xl border-2 p-3.5 text-left transition-colors ${plan === "monthly" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-                >
-                  <p className="text-[10px] font-bold tracking-widest text-muted-foreground mb-1">MONTHLY</p>
-                  <p className="text-xl font-serif font-bold">$9.99</p>
-                  <p className="text-xs text-muted-foreground">per month, renews monthly</p>
-                </button>
-                <button
-                  onClick={() => setPlan("yearly")}
-                  className={`relative rounded-2xl border-2 p-3.5 text-left transition-colors ${plan === "yearly" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
-                >
-                  <span className="absolute -top-2.5 left-3 text-[9px] font-bold bg-primary text-white px-2 py-0.5 rounded-full tracking-wide">BEST VALUE</span>
-                  <p className="text-[10px] font-bold tracking-widest text-muted-foreground mb-1 mt-1">YEARLY</p>
-                  <p className="text-xl font-serif font-bold">$19.99</p>
-                  <p className="text-xs text-muted-foreground">per year, renews annually</p>
-                </button>
-              </div>
-
-              <ul className="space-y-2 mb-5">
-                {FEATURES.map((f) => (
-                  <li key={f} className="flex items-center gap-2.5 text-sm text-foreground/80">
-                    <span className="w-4 h-4 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                      <Check size={10} className="text-primary" strokeWidth={3} />
+              <ul className="space-y-2.5 mb-6">
+                {UNLOCK_OPTIONS.map((o) => (
+                  <li key={o.title} className="flex items-start gap-3 rounded-2xl border border-border p-3.5">
+                    <span className="mt-0.5 w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                      <Check size={11} className="text-primary" strokeWidth={3} />
                     </span>
-                    {f}
+                    <span className="flex-1">
+                      <span className="block text-sm font-semibold">{o.title}</span>
+                      <span className="block text-xs text-muted-foreground">{o.detail}</span>
+                    </span>
+                    <span className="text-sm font-bold">{o.price}</span>
                   </li>
                 ))}
               </ul>
 
-              {error && (
-                <p className="text-xs text-destructive mb-3 text-center">{error}</p>
-              )}
-
-              <button
-                onClick={handleUpgrade}
-                disabled={loading}
-                className="w-full bg-primary text-white font-semibold py-3.5 rounded-full hover:bg-primary/90 transition-colors text-base mb-2.5 disabled:opacity-60"
+              <a
+                href={APP_STORE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full bg-foreground text-background font-semibold py-3.5 rounded-full hover:bg-foreground/90 transition-colors text-base mb-2.5"
               >
-                {loading ? "Loading…" : plan === "yearly" ? "Subscribe — $19.99/yr" : "Subscribe — $9.99/mo"}
-              </button>
-              <p className="text-center text-[11px] text-muted-foreground mb-1">
-                Powered by Paddle · Cancel anytime
-              </p>
-              <p className="text-center text-[10px] text-muted-foreground/70 mb-2">
-                Taxes may apply and will be calculated at checkout.
+                <SiApple size={16} /> Open Packyo on the App Store
+              </a>
+              <p className="text-center text-[11px] text-muted-foreground mb-2">
+                One-time purchase per trip · No subscription · Paid through Apple
               </p>
               <button
                 onClick={onClose}

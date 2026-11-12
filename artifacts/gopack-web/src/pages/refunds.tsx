@@ -1,3 +1,7 @@
+const h2 = { fontSize: 20, marginTop: 36, marginBottom: 10 } as const;
+const ul = { paddingLeft: 22 } as const;
+const link = { color: "#E85D3A" } as const;
+
 export default function Refunds() {
   return (
     <div style={{
@@ -8,37 +12,27 @@ export default function Refunds() {
       lineHeight: 1.6,
       color: "#1a1a1a",
     }}>
-      <h1 style={{ fontSize: 28, marginBottom: 4 }}>Refund &amp; Cancellation Policy</h1>
-      <p style={{ color: "#777", fontSize: 14, marginBottom: 32 }}>Last updated: July 9, 2026</p>
+      <h1 style={{ fontSize: 28, marginBottom: 4 }}>Refund Policy</h1>
+      <p style={{ color: "#777", fontSize: 14, marginBottom: 32 }}>Last updated: November 12, 2026</p>
 
-      <p>GoPackNow subscriptions are processed by <strong>Paddle.com</strong>, our Merchant of Record. Paddle handles all billing, refunds, and payment disputes on our behalf.</p>
+      <p>Itinerary unlocks in Packyo are one-time purchases made in the iOS app through Apple's App Store. Packyo has no subscriptions, so there is nothing to cancel.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>Cancellation</h2>
-      <p>You may cancel your GoPackNow Plus subscription at any time. Cancellations take effect at the end of your current billing period — you retain access to Plus features until then. After the period ends your subscription will not renew and you will revert to the starter tier.</p>
-      <p>To cancel: go to your <strong>Profile</strong> page in the app and tap <strong>Manage Subscription</strong>, or email us at <a href="mailto:support@gopack.now" style={{ color: "#E85D3A" }}>support@gopack.now</a>.</p>
-
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>Refunds</h2>
-      <p>We offer a <strong>14-day money-back guarantee</strong> for new subscriptions. If you are not satisfied within the first 14 days of your initial subscription, contact us and we will issue a full refund — no questions asked.</p>
-      <p>Refunds are not available for:</p>
-      <ul style={{ paddingLeft: 22 }}>
-        <li>Renewal charges where a cancellation reminder was not acted on</li>
-        <li>Partial billing periods</li>
-        <li>Charges older than 14 days (except where required by applicable law)</li>
+      <h2 style={h2}>How to Request a Refund</h2>
+      <p>Because Apple processes the payment, refunds are handled by Apple:</p>
+      <ul style={ul}>
+        <li>Go to <a href="https://reportaproblem.apple.com" target="_blank" rel="noopener noreferrer" style={link}>reportaproblem.apple.com</a> and sign in with your Apple ID.</li>
+        <li>Find the Packyo purchase, choose "Request a refund," and tell Apple why.</li>
+        <li>Apple reviews the request and lets you know the outcome, usually within a few days.</li>
       </ul>
-      <p>If you believe you were charged in error, contact us within 30 days and we will investigate promptly.</p>
+      <p>Apple decides refunds under its own policies, and we can't issue them directly. If a refund is approved, the unlock may be removed from the trip.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>How to Request a Refund</h2>
-      <p>Email <a href="mailto:support@gopack.now" style={{ color: "#E85D3A" }}>support@gopack.now</a> with your account email and a brief description. We aim to respond within 2 business days. Approved refunds are processed by Paddle and typically appear on your statement within 5–10 business days depending on your bank.</p>
+      <h2 style={h2}>Problems With a Purchase</h2>
+      <p>If you paid but the itinerary didn't unlock, first open the trip and tap "Already paid? Refresh" on the unlock screen. If it still doesn't unlock, email us at <a href="mailto:support@gopack.now" style={link}>support@gopack.now</a> with your account email and the trip name, and we'll fix it.</p>
 
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>Disputes</h2>
-      <p>Because Paddle is our Merchant of Record, any billing disputes or chargebacks are handled by Paddle. You can also contact Paddle directly via their <a href="https://www.paddle.com/support" style={{ color: "#E85D3A" }} target="_blank" rel="noopener noreferrer">support page</a>.</p>
-
-      <h2 style={{ fontSize: 20, marginTop: 36, marginBottom: 10 }}>Contact</h2>
+      <h2 style={h2}>Contact</h2>
       <div style={{ background: "#f7f7f7", borderRadius: 10, padding: "16px 20px", marginTop: 12 }}>
-        <p style={{ margin: 0 }}>Questions about billing or refunds?</p>
-        <p style={{ margin: "4px 0 0" }}>
-          <a href="mailto:support@gopack.now" style={{ color: "#E85D3A" }}>support@gopack.now</a>
-        </p>
+        <p style={{ margin: 0 }}>Questions about a purchase?</p>
+        <p style={{ margin: "4px 0 0" }}><a href="mailto:support@gopack.now" style={link}>support@gopack.now</a></p>
       </div>
     </div>
   );
