@@ -3,7 +3,8 @@ import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { Resend } from "resend";
-import { getAdminDb } from "../lib/firebase-admin";
+import { getAdminApp, getAdminDb } from "../lib/firebase-admin";
+import { getStorage } from "firebase-admin/storage";
 import { MASCOT_PNG_BASE64 } from "../lib/email-assets";
 import { VERIFICATION_SUBJECT, verificationEmailHtml, verificationEmailText } from "../lib/verification-email";
 
@@ -312,6 +313,7 @@ router.post("/auth/delete-account", async (req: Request, res: Response) => {
       );
       const updates: Record<string, unknown> = {
         [`userTrips/${uid}`]: null,
+        [`emailVerificationSends/${uid}`]: null,
         [`accountDeletion/${uid}`]: {
           status: "database_cleaned",
           updatedAt: Date.now(),
@@ -322,15 +324,32 @@ router.post("/auth/delete-account", async (req: Request, res: Response) => {
         if (!trip.exists()) continue;
         if (trip.val()?.hostMemberId === uid) {
           updates[`trips/${tripId}`] = null;
+          updates[`itineraryUnlocks/${tripId}`] = null;
         } else {
           updates[`trips/${tripId}/members/${uid}`] = null;
+          updates[`trips/${tripId}/memberReviews/${uid}`] = null;
+          if (trip.val()?.review?.reviewedBy === uid) updates[`trips/${tripId}/review`] = null;
+          updates[`itineraryUnlocks/${tripId}/members/${uid}`] = null;
         }
       }
+
+      // Public reviews (Discover) this user wrote, including ones for trips they've left.
+      const publicReviews = await adminDb.ref("reviews").orderByChild("reviewedBy").equalTo(uid).get();
+      publicReviews.forEach((r) => {
+        updates[`reviews/${r.key}`] = null;
+      });
 
       // Firebase applies this multi-location update atomically. It records a
       // durable retry marker only if every account-data mutation succeeds.
       await adminDb.ref().update(updates);
     }
+
+    // Profile photo in Cloud Storage. Best effort: a storage hiccup shouldn't
+    // block deleting the account itself.
+    await getStorage(getAdminApp())
+      .bucket("gopacknow-83d54.firebasestorage.app")
+      .deleteFiles({ prefix: `profilePhotos/${uid}/` })
+      .catch((err) => req.log.warn({ err, uid }, "delete-account: profile photo cleanup failed"));
 
     await getFirebaseAdminAuth().deleteUser(uid).catch((err: { code?: string }) => {
       if (err.code !== "auth/user-not-found") throw err;
