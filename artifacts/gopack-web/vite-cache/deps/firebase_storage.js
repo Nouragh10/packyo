@@ -1,19 +1,21 @@
 import {
-  Component,
-  FirebaseError,
   SDK_VERSION,
   _getProvider,
   _isFirebaseServerApp,
   _registerComponent,
-  createMockUserToken,
   getApp,
+  registerVersion
+} from "./chunk-ESFJGAWI.js";
+import {
+  Component,
+  FirebaseError,
+  createMockUserToken,
   getDefaultEmulatorHostnameAndPort,
   getModularInstance,
   isCloudWorkstation,
-  pingServer,
-  registerVersion
-} from "./chunk-BONB3HTN.js";
-import "./chunk-PR4QN5HX.js";
+  pingServer
+} from "./chunk-RVSWSAJX.js";
+import "./chunk-ZPWHCABL.js";
 
 // ../../node_modules/.pnpm/@firebase+storage@0.14.3_@firebase+app@0.15.0/node_modules/@firebase/storage/dist/index.esm.js
 var DEFAULT_HOST = "firebasestorage.googleapis.com";

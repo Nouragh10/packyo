@@ -7,6 +7,7 @@ const { pipeline } = require("stream/promises");
 
 let metroProcess = null;
 let metroPort = null;
+let metroStopping = false;
 
 const projectRoot = path.resolve(__dirname, "..");
 
@@ -26,6 +27,7 @@ const basePath = (process.env.BASE_PATH || "/").replace(/\/+$/, "");
 
 function exitWithError(message) {
   console.error(message);
+  metroStopping = true;
   if (metroProcess) {
     metroProcess.kill();
   }
@@ -34,6 +36,7 @@ function exitWithError(message) {
 
 function setupSignalHandlers() {
   const cleanup = () => {
+    metroStopping = true;
     if (metroProcess) {
       console.log("Cleaning up Metro process...");
       metroProcess.kill();
@@ -178,6 +181,11 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   console.log(`Using Metro port ${metroPort}`);
   const env = {
     ...process.env,
+    // Leave room for Metro's worker and the build wrapper in the publishing
+    // container, rather than sizing Node's heap from the host machine.
+    NODE_OPTIONS: process.env.NODE_OPTIONS?.includes("--max-old-space-size")
+      ? process.env.NODE_OPTIONS
+      : `${process.env.NODE_OPTIONS || ""} --max-old-space-size=2048`.trim(),
     PORT: String(metroPort),
     EXPO_PUBLIC_DOMAIN: expoPublicDomain,
     EXPO_PUBLIC_REPL_ID: expoPublicReplId,
@@ -186,6 +194,7 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
   if (expoPublicReplId) {
     console.log(`Setting EXPO_PUBLIC_REPL_ID=${expoPublicReplId}`);
   }
+  console.log("Production Metro build: 1 worker; Node options:", env.NODE_OPTIONS);
 
   metroProcess = spawn(
     "pnpm",
@@ -195,6 +204,8 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       "start",
       "--no-dev",
       "--minify",
+      "--max-workers",
+      "1",
       "--localhost",
       "--port",
       String(metroPort),
@@ -206,6 +217,18 @@ async function startMetro(expoPublicDomain, expoPublicReplId) {
       env,
     },
   );
+
+  metroProcess.on("error", (error) => {
+    exitWithError(`Metro could not start: ${error.message}`);
+  });
+  metroProcess.on("exit", (code, signal) => {
+    if (!metroStopping) {
+      exitWithError(
+        `Metro exited before the build finished (exit code: ${code}, signal: ${signal || "none"}). ` +
+          "If it was killed, check the publishing container's memory limit.",
+      );
+    }
+  });
 
   if (metroProcess.stdout) {
     metroProcess.stdout.on("data", (data) => {
@@ -244,7 +267,8 @@ async function downloadFile(url, outputPath) {
     const response = await fetch(url, { signal: controller.signal });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const details = (await response.text()).slice(0, 8000);
+      throw new Error(`HTTP ${response.status}: ${details}`);
     }
 
     const file = fs.createWriteStream(outputPath);
@@ -601,6 +625,7 @@ async function main() {
 
   console.log("Build complete! Deploy to:", baseUrl);
 
+  metroStopping = true;
   if (metroProcess) {
     metroProcess.kill();
   }
@@ -609,6 +634,7 @@ async function main() {
 
 main().catch((error) => {
   console.error("Build failed:", error.message);
+  metroStopping = true;
   if (metroProcess) {
     metroProcess.kill();
   }

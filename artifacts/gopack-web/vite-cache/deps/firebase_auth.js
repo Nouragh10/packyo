@@ -1,19 +1,22 @@
 import {
+  SDK_VERSION,
+  _getProvider,
+  _isFirebaseServerApp,
+  _registerComponent,
+  getApp,
+  registerVersion
+} from "./chunk-ESFJGAWI.js";
+import {
   Component,
   Deferred,
   ErrorFactory,
   FirebaseError,
   LogLevel,
   Logger,
-  SDK_VERSION,
-  _getProvider,
-  _isFirebaseServerApp,
-  _registerComponent,
   base64Decode,
   createSubscribe,
   deepEqual,
   extractQuerystring,
-  getApp,
   getDefaultEmulatorHost,
   getExperimentalSetting,
   getModularInstance,
@@ -27,10 +30,9 @@ import {
   isReactNative,
   pingServer,
   querystring,
-  querystringDecode,
-  registerVersion
-} from "./chunk-BONB3HTN.js";
-import "./chunk-PR4QN5HX.js";
+  querystringDecode
+} from "./chunk-RVSWSAJX.js";
+import "./chunk-ZPWHCABL.js";
 
 // ../../node_modules/.pnpm/@firebase+auth@1.13.3_@firebase+app@0.15.0_@react-native-async-storage+async-storage@2._f179b9efb71eafd01694865d115df6a8/node_modules/@firebase/auth/dist/esm/index-d90d2ee5.js
 var FactorId = {

@@ -68,6 +68,13 @@ catalog:
 
 autoInstallPeers: false
 
+# This release imports @firebase/app at runtime but lists it only in
+# devDependencies. Declare it explicitly so isolated pnpm installs can resolve it.
+packageExtensions:
+  '@firebase/database@1.1.4':
+    dependencies:
+      '@firebase/app': '0.16.0'
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild
