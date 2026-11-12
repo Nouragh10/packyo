@@ -78,6 +78,6 @@
   "dependencies": {
     "@vercel/analytics": "^2.0.1",
     "@workspace/activity-pricing": "workspace:*",
-    "firebase": "^12.15.0"
+    "firebase": "^12.17.1"
   }
 }
