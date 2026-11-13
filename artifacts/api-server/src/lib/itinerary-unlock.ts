@@ -36,6 +36,17 @@ export class UnlockError extends Error {
   }
 }
 
+/**
+ * Master switch for the itinerary paywall. Off unless PAYWALL_ENABLED=true is set
+ * (Replit Secrets), so it can be paused without an app update, e.g. while App
+ * Store paid-apps agreements are pending and purchases can't load.
+ */
+export function paywallEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.PAYWALL_ENABLED === "true";
+}
+
+export const OPEN_ACCESS: ItineraryAccess = { unlocked: true, via: null, groupUnlockedBy: null };
+
 export function isUnlockKind(v: unknown): v is UnlockKind {
   return v === "group" || v === "personal";
 }
