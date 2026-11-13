@@ -864,7 +864,7 @@ export default function ItineraryScreen() {
       itinerary.title,
       `${trip.destination} · ${trip.days} days`,
       "",
-      ...days.flatMap((day) => [
+      ...visibleDays.flatMap((day) => [
         `── Day ${day.dayNumber}: ${day.city} ──`,
         day.theme,
         ...day.activities.map(
@@ -872,7 +872,9 @@ export default function ItineraryScreen() {
         ),
         "",
       ]),
-      totalCost > 0 ? `Estimated total: ~$${totalCost}/person` : "",
+      itineraryLocked && days.length > 1
+        ? `+ ${days.length - 1} more day${days.length - 1 === 1 ? "" : "s"}. Unlock the full itinerary in Packyo.`
+        : totalCost > 0 ? `Estimated total: ~$${totalCost}/person` : "",
       "Built with packyo ✦",
     ].filter(Boolean);
     try {
@@ -1242,7 +1244,7 @@ export default function ItineraryScreen() {
           <Text style={[styles.titleDest, { color: colors.foreground, marginBottom: 16 }]}>{trip.destination}</Text>
           {(() => {
             let fallbackIndex = 0;
-            return days.flatMap((day) =>
+            return visibleDays.flatMap((day) =>
             day.activities.map((act, i) => {
               const photoQ = act.photoQuery ?? `${act.name} ${trip.destination}`;
               const currentFallbackIndex = fallbackIndex++;
@@ -1297,6 +1299,22 @@ export default function ItineraryScreen() {
             })
             );
           })()}
+          {itineraryLocked && days.length > 1 && (
+            <Pressable
+              testID="info-locked"
+              onPress={() => setActiveTab("itinerary")}
+              style={({ pressed }) => [styles.infoCard, { backgroundColor: colors.card, borderColor: colors.primary, padding: 16, flexDirection: "row", alignItems: "center", gap: 12, opacity: pressed ? 0.88 : 1 }]}
+            >
+              <Feather name="lock" size={18} color={colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.infoCardName, { color: colors.foreground }]}>
+                  {days.slice(1).reduce((n, d) => n + d.activities.length, 0)} more activities on Days 2–{days.length}
+                </Text>
+                <Text style={[styles.infoCardDesc, { color: colors.mutedForeground }]}>Unlock the full trip to see every place, time, and price.</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            </Pressable>
+          )}
         </ScrollView>
       )}
 
