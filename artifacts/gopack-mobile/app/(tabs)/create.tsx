@@ -25,7 +25,7 @@ import {
 } from "@/lib/settings";
 import { apiFetch } from "@/lib/api-client";
 import { PlacePicker } from "@/components/PlacePicker";
-import { destinationFromPlaces, searchPlaces, type TripPlace } from "@/lib/places";
+import { destinationFromPlaces, resolvePlace, searchPlaces, type TripPlace } from "@/lib/places";
 
 const VIBES = [
   "Relaxing", "Adventure", "Foodie",
@@ -82,8 +82,9 @@ export default function CreateScreen() {
       .then((found) => {
         const wanted = prefillDestination.split(",")[0].trim().toLowerCase();
         const match = found.find((p) => p.name.toLowerCase() === wanted) ?? found[0];
-        if (active && match) setPlaces([match]);
+        return match ? resolvePlace(match) : undefined;
       })
+      .then((place) => { if (active && place) setPlaces([place]); })
       .catch(() => undefined);
     return () => { active = false; };
   }, [prefillDestination]);

@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { searchPlaces } from "../lib/places";
+import { placeDetails, searchPlaces } from "../lib/places";
+import { validSession } from "../lib/google-places";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -27,9 +28,25 @@ router.get("/places/search", async (req, res) => {
   if (!allow(client)) { res.status(429).json({ error: "Too many searches. Try again in a minute." }); return; }
   try {
     res.set("Cache-Control", "public, max-age=3600");
-    res.json({ places: await searchPlaces(q) });
+    res.json({ places: await searchPlaces(q, fetch, 8, validSession(req.query.session)) });
   } catch (err) {
     logger.warn({ err }, "place search failed");
+    res.status(502).json({ error: "Place search is unavailable right now." });
+  }
+});
+
+// Coordinates and area for a suggestion the user picked (Google suggestions
+// come without them). Same session token as the search, so it's billed once.
+router.get("/places/details", async (req, res) => {
+  const id = String(req.query.id ?? "");
+  if (!id) { res.status(400).json({ error: "Missing place." }); return; }
+  try {
+    const place = await placeDetails(id, validSession(req.query.session));
+    if (!place) { res.status(404).json({ error: "Couldn't find that place. Try another." }); return; }
+    res.set("Cache-Control", "public, max-age=86400");
+    res.json({ place });
+  } catch (err) {
+    logger.warn({ err }, "place details failed");
     res.status(502).json({ error: "Place search is unavailable right now." });
   }
 });

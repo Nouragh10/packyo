@@ -5,10 +5,12 @@
 // place's bounding box). The itinerary generator then uses those areas as a
 // hard fence and checks AI-picked venues against OpenStreetMap.
 //
-// Search goes to Photon (OpenStreetMap, komoot's public server) with
-// Open-Meteo's GeoNames-based geocoder as a fallback. Neither needs a key.
+// With GOOGLE_PLACES_API_KEY set, search and venue checks use Google Places.
+// Otherwise (or if Google fails) search goes to Photon (OpenStreetMap,
+// komoot's public server) with Open-Meteo's GeoNames geocoder as a fallback.
 
 import { haversineKm } from "./itinerary-geo";
+import { googleAutocomplete, googleKey, googlePlaceDetails, googleTextSearch, replacementQuery, type GoogleVenue } from "./google-places";
 
 export type PlaceKind = "country" | "region" | "city" | "town" | "area";
 
@@ -24,6 +26,8 @@ export type TripPlace = {
   lng: number;
   /** south, west, north, east */
   bbox?: [number, number, number, number];
+  /** A Google suggestion: call placeDetails for coordinates before using it. */
+  pending?: boolean;
 };
 
 type Fetch = typeof fetch;
@@ -150,28 +154,43 @@ async function getJson(url: string, fetchImpl: Fetch, timeoutMs: number): Promis
   return res.json();
 }
 
-export async function searchPlaces(query: string, fetchImpl: Fetch = fetch, limit = 8): Promise<TripPlace[]> {
+export async function searchPlaces(query: string, fetchImpl: Fetch = fetch, limit = 8, session?: string): Promise<TripPlace[]> {
   const q = query.trim().replace(/\s+/g, " ").slice(0, 100);
   if (q.length < 2) return [];
-  const key = q.toLowerCase();
+  const gKey = googleKey();
+  const key = `${gKey ? "g" : "o"}:${q.toLowerCase()}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.places;
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.places.slice(0, limit);
 
   let places: TripPlace[] = [];
-  try {
-    places = parsePhoton(await getJson(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=20&lang=en`, fetchImpl, 5000));
-  } catch { /* fall through to the fallback */ }
+  if (gKey) {
+    try {
+      places = await googleAutocomplete(q, gKey, session, fetchImpl);
+    } catch { /* fall back to OpenStreetMap */ }
+  }
+  if (places.length === 0) {
+    try {
+      places = parsePhoton(await getJson(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=20&lang=en`, fetchImpl, 5000));
+    } catch { /* fall through to the fallback */ }
+  }
   if (places.length === 0) {
     try {
       places = parseOpenMeteo(await getJson(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=en&format=json`, fetchImpl, 5000));
     } catch { /* nothing found */ }
   }
-  places = dedupe(places).slice(0, limit);
+  places = dedupe(places).slice(0, 8);
   if (places.length > 0) {
     if (cache.size > 2000) cache.delete(cache.keys().next().value as string);
     cache.set(key, { at: Date.now(), places });
   }
-  return places;
+  return places.slice(0, limit);
+}
+
+/** Coordinates and area for a Google suggestion the user picked. */
+export async function placeDetails(id: string, session?: string, fetchImpl: Fetch = fetch): Promise<TripPlace | null> {
+  const gKey = googleKey();
+  if (!gKey || !id.startsWith("g:")) return null;
+  return googlePlaceDetails(id, gKey, session, fetchImpl);
 }
 
 /**
@@ -186,6 +205,7 @@ export async function resolveDestinationPlaces(destination: string, fetchImpl: F
   const found = await Promise.all(parts.map((part) =>
     searchPlaces(part, fetchImpl, 3)
       .then((r) => r.find((p) => namesMatch(part.split(",")[0], p.name)))
+      .then((p) => (p?.pending ? placeDetails(p.id, undefined, fetchImpl) : p) ?? undefined)
       .catch(() => undefined)));
   return found.filter((p): p is TripPlace => !!p);
 }
@@ -296,8 +316,22 @@ export function namesMatch(a: string, b: string): boolean {
   return shared / Math.min(ta.length, tb.size) >= 0.6;
 }
 
-/** Finds a venue by name inside a place on OpenStreetMap. */
-export async function findVenue(name: string, place: TripPlace, fetchImpl: Fetch = fetch, timeoutMs = 6000): Promise<{ name: string; lat: number; lng: number } | null> {
+/**
+ * Finds a venue by name inside a place: Google when configured (which also
+ * says whether it has permanently closed), otherwise OpenStreetMap.
+ */
+export async function findVenue(
+  name: string,
+  place: TripPlace,
+  fetchImpl: Fetch = fetch,
+  timeoutMs = 6000,
+): Promise<{ name: string; lat: number; lng: number; closed?: boolean } | null> {
+  const gKey = googleKey();
+  if (gKey) {
+    const results = await googleTextSearch(name, searchBox(place), gKey, fetchImpl, timeoutMs, 5);
+    const match = results.find((r) => placeContains(place, r) && namesMatch(name, r.name));
+    return match ? { name: match.name, lat: match.lat, lng: match.lng, closed: match.closed } : null;
+  }
   const [s, w, n, e] = searchBox(place);
   const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(name.slice(0, 120))}&limit=5&lang=en&bbox=${w},${s},${e},${n}`;
   const body = await getJson(url, fetchImpl, timeoutMs) as { features?: PhotonFeature[] };
@@ -309,4 +343,22 @@ export async function findVenue(name: string, place: TripPlace, fetchImpl: Fetch
     if (namesMatch(name, fname)) return { name: fname, lat, lng };
   }
   return null;
+}
+
+/**
+ * A real, open venue of the same kind inside the place, from Google, that
+ * isn't already in the trip. Null without a Google key or when none is found.
+ */
+export async function findReplacementVenue(
+  tag: string,
+  name: string,
+  place: TripPlace,
+  usedNames: Set<string>,
+  fetchImpl: Fetch = fetch,
+  timeoutMs = 6000,
+): Promise<GoogleVenue | null> {
+  const gKey = googleKey();
+  if (!gKey) return null;
+  const results = await googleTextSearch(`${replacementQuery(tag, name)} in ${place.name}`, searchBox(place), gKey, fetchImpl, timeoutMs, 10);
+  return results.find((r) => !r.closed && placeContains(place, r) && !usedNames.has(normalizeName(r.name))) ?? null;
 }

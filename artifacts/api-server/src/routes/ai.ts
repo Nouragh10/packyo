@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { googleKey } from "../lib/google-places";
 import { OFF_AREA_KM, applyReplacements, coordsOf, findOffAreaActivities, findOutsideTripActivities, haversineKm, mergeSlots, type OffAreaSlot, type Replacement } from "../lib/itinerary-geo";
-import { findVenue, insideAnyPlace, nearestPlace, placeContains, placeForCity, resolveDestinationPlaces, sanitizePlaces, type TripPlace } from "../lib/places";
+import { findReplacementVenue, findVenue, insideAnyPlace, normalizeName, nearestPlace, placeContains, placeForCity, resolveDestinationPlaces, sanitizePlaces, type TripPlace } from "../lib/places";
 import { randomUUID } from "node:crypto";
 import { callAnthropic } from "../lib/anthropic";
 import { itineraryTool, itineraryResponseText, ITINERARY_TOOL, type ItineraryAiResponse } from "../lib/itinerary-output";
@@ -351,9 +352,10 @@ async function verifyVenuesExist(
   }));
   if (items.length === 0) return itinerary;
 
-  // 1) OpenStreetMap lookups, a few at a time, capped at 15 seconds overall.
+  // 1) Map lookups (Google when configured, else OpenStreetMap), a few at a
+  //    time, capped at 15 seconds overall.
   const lookupEnd = Date.now() + 15_000;
-  const found: Array<{ lat: number; lng: number } | null> = new Array(items.length).fill(null);
+  const found: Array<{ lat: number; lng: number; closed?: boolean } | null> = new Array(items.length).fill(null);
   let next = 0;
   const worker = async () => {
     while (next < items.length && Date.now() < lookupEnd && !signal.aborted) {
@@ -364,13 +366,37 @@ async function verifyVenuesExist(
     }
   };
   await Promise.all(Array.from({ length: Math.min(6, items.length) }, worker));
-  const unverified: Item[] = [];
+  let unverified: Item[] = [];
   items.forEach((it, i) => {
     const f = found[i];
-    if (f) { it.act.lat = f.lat; it.act.lng = f.lng; } else unverified.push(it);
+    if (f && !f.closed) { it.act.lat = f.lat; it.act.lng = f.lng; } else unverified.push(it);
   });
-  log.info?.({ checked: items.length, onMap: items.length - unverified.length }, "Itinerary venues checked against OpenStreetMap");
+  log.info?.({ checked: items.length, onMap: items.length - unverified.length, google: !!googleKey() }, "Itinerary venues checked against the map");
   if (unverified.length === 0) return itinerary;
+
+  // 1b) With Google, swap anything it doesn't know (or knows is closed) for a
+  //     real, open place of the same kind in the same town.
+  if (googleKey()) {
+    const used = new Set(shape.days.flatMap((d) => d.activities.map((a) => normalizeName(String(a.name ?? "")))));
+    const swapEnd = Date.now() + 15_000;
+    const left: Item[] = [];
+    for (const it of unverified) {
+      if (Date.now() > swapEnd || signal.aborted) { left.push(it); continue; }
+      try {
+        const v = await findReplacementVenue(String(it.act.tag ?? ""), it.name, it.place, used, fetch, Math.max(1000, Math.min(6000, swapEnd - Date.now())));
+        if (!v) { left.push(it); continue; }
+        used.add(normalizeName(v.name));
+        it.act.name = v.name;
+        it.act.lat = v.lat;
+        it.act.lng = v.lng;
+        it.act.description = [v.type ?? "Local spot", v.rating ? `rated ${v.rating} on Google` : "", v.address ?? ""].filter(Boolean).join(" · ").slice(0, 120);
+        it.act.photoQuery = `${v.name} ${it.place.name}`;
+      } catch { left.push(it); }
+    }
+    log.info?.({ replaced: unverified.length - left.length, left: left.length }, "Replaced unmapped venues with real Google places");
+    unverified = left;
+    if (unverified.length === 0) return itinerary;
+  }
 
   // 2) One web-search pass for venues the map didn't know. Food and nightlife
   //    spots are the ones most often invented, so they go first.

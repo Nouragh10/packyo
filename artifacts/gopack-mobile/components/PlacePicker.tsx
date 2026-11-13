@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useColors } from "@/hooks/useColors";
-import { flagEmoji, kindLabel, MAX_TRIP_PLACES, searchPlaces, type TripPlace } from "@/lib/places";
+import { flagEmoji, kindLabel, MAX_TRIP_PLACES, newPlaceSession, resolvePlace, searchPlaces, type TripPlace } from "@/lib/places";
 
 type Props = {
   places: TripPlace[];
@@ -22,7 +22,9 @@ export function PlacePicker({ places, onChange, placeholder }: Props) {
   const [results, setResults] = useState<TripPlace[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
   const requestId = useRef(0);
+  const session = useRef(newPlaceSession());
   const full = places.length >= MAX_TRIP_PLACES;
 
   useEffect(() => {
@@ -36,7 +38,7 @@ export function PlacePicker({ places, onChange, placeholder }: Props) {
     const id = ++requestId.current;
     setLoading(true);
     const timer = setTimeout(() => {
-      searchPlaces(q)
+      searchPlaces(q, session.current)
         .then((found) => {
           if (id !== requestId.current) return;
           const chosen = new Set(places.map((p) => p.id));
@@ -53,11 +55,22 @@ export function PlacePicker({ places, onChange, placeholder }: Props) {
     return () => clearTimeout(timer);
   }, [query, places]);
 
-  const add = (place: TripPlace) => {
+  const add = async (place: TripPlace) => {
+    if (adding) return;
     void Haptics.selectionAsync().catch(() => undefined);
-    onChange([...places, place]);
-    setQuery("");
-    setResults([]);
+    setAdding(place.id);
+    try {
+      const full = await resolvePlace(place, session.current);
+      if (!places.some((p) => p.id === full.id)) onChange([...places, full]);
+      setQuery("");
+      setResults([]);
+      setError("");
+      session.current = newPlaceSession();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't load that place. Try again.");
+    } finally {
+      setAdding(null);
+    }
   };
 
   const remove = (id: string) => onChange(places.filter((p) => p.id !== id));
@@ -105,7 +118,8 @@ export function PlacePicker({ places, onChange, placeholder }: Props) {
           {results.map((p, i) => (
             <Pressable
               key={p.id}
-              onPress={() => add(p)}
+              onPress={() => { void add(p); }}
+              disabled={!!adding}
               style={({ pressed }) => [
                 styles.row,
                 i > 0 && { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
@@ -119,13 +133,15 @@ export function PlacePicker({ places, onChange, placeholder }: Props) {
                   {[kindLabel(p.kind), p.label.startsWith(`${p.name}, `) ? p.label.slice(p.name.length + 2) : p.label === p.name ? "" : p.label].filter(Boolean).join(" · ")}
                 </Text>
               </View>
-              <Feather name="plus" size={16} color={colors.primary} />
+              {adding === p.id
+                ? <ActivityIndicator size="small" color={colors.primary} />
+                : <Feather name="plus" size={16} color={colors.primary} />}
             </Pressable>
           ))}
         </View>
       )}
 
-      {!!error && results.length === 0 && query.trim().length >= 2 && !loading && (
+      {!!error && query.trim().length >= 2 && !loading && (
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>{error}</Text>
       )}
       {full && (

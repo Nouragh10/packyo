@@ -15,20 +15,44 @@ export type TripPlace = {
   lng: number;
   /** south, west, north, east */
   bbox?: [number, number, number, number];
+  /** A suggestion without coordinates yet: call placeDetails before using it. */
+  pending?: boolean;
 };
 
 export const MAX_TRIP_PLACES = 5;
 
-export async function searchPlaces(query: string): Promise<TripPlace[]> {
+/** Groups one search's typing and the final pick (Google bills them as one). */
+export function newPlaceSession(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+async function errorText(res: Response, fallback: string) {
+  const body = await res.json().catch(() => ({})) as { error?: string };
+  return body.error ?? fallback;
+}
+
+export async function searchPlaces(query: string, session?: string): Promise<TripPlace[]> {
   const q = query.trim();
   if (q.length < 2) return [];
-  const res = await apiFetch(`/api/places/search?q=${encodeURIComponent(q)}`, undefined, 10_000);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string };
-    throw new Error(body.error ?? "Couldn't search places right now.");
-  }
+  const qs = `q=${encodeURIComponent(q)}${session ? `&session=${session}` : ""}`;
+  const res = await apiFetch(`/api/places/search?${qs}`, undefined, 10_000);
+  if (!res.ok) throw new Error(await errorText(res, "Couldn't search places right now."));
   const body = await res.json() as { places?: TripPlace[] };
   return Array.isArray(body.places) ? body.places : [];
+}
+
+/** Fills in coordinates for a suggestion; places that already have them pass through. */
+export async function resolvePlace(place: TripPlace, session?: string): Promise<TripPlace> {
+  if (!place.pending) return place;
+  const qs = `id=${encodeURIComponent(place.id)}${session ? `&session=${session}` : ""}`;
+  const res = await apiFetch(`/api/places/details?${qs}`, undefined, 10_000);
+  if (!res.ok) throw new Error(await errorText(res, "Couldn't load that place. Try again."));
+  const body = await res.json() as { place?: TripPlace };
+  if (!body.place) throw new Error("Couldn't load that place. Try again.");
+  return body.place;
 }
 
 /** The trip's display name: "Umluj", "Riyadh & Jeddah", "Riyadh, Jeddah & AlUla". */
