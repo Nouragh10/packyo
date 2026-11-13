@@ -3,7 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getAdminApp, getAdminDb } from "../lib/firebase-admin";
 import { logger } from "../lib/logger";
 import {
-  CLAIM_ROOT, UNLOCK_ROOT, UnlockError, accessFor, claimKey, isUnlockKind, validTransactionId, verifyWithRevenueCat,
+  CLAIM_ROOT, OPEN_ACCESS, UNLOCK_ROOT, UnlockError, accessFor, paywallEnabled, claimKey, isUnlockKind, validTransactionId, verifyWithRevenueCat,
   type TripUnlocks,
 } from "../lib/itinerary-unlock";
 
@@ -38,6 +38,10 @@ function sendError(res: import("express").Response, err: unknown) {
 router.get("/trips/:tripId/itinerary-access", async (req, res) => {
   try {
     const { uid, tripId, db } = await memberContext(req);
+    if (!paywallEnabled()) {
+      res.json(OPEN_ACCESS);
+      return;
+    }
     const unlocks = (await db.ref(`${UNLOCK_ROOT}/${tripId}`).get()).val() as TripUnlocks | null;
     res.json(accessFor(unlocks, uid));
   } catch (err) { sendError(res, err); }

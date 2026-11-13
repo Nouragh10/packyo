@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { accessFor, claimKey, purchaseListed, validTransactionId, verifyWithRevenueCat, UNLOCK_PRODUCTS } from "./itinerary-unlock";
+import { paywallEnabled, OPEN_ACCESS, accessFor, claimKey, purchaseListed, validTransactionId, verifyWithRevenueCat, UNLOCK_PRODUCTS } from "./itinerary-unlock";
 
 test("group unlock opens the itinerary for every member", () => {
   const u = { group: { uid: "a", name: "Norah", at: "x" } };
@@ -40,4 +40,11 @@ test("verification asks RevenueCat about the signed-in user", async () => {
   assert.equal(await verifyWithRevenueCat("uid 1", "group", "t1", fake), true);
   assert.equal(url, "https://api.revenuecat.com/v1/subscribers/uid%201");
   assert.equal(await verifyWithRevenueCat("uid 1", "personal", "t1", fake), false);
+});
+
+test("paywall is off unless PAYWALL_ENABLED is exactly 'true'", () => {
+  assert.equal(paywallEnabled({}), false);
+  assert.equal(paywallEnabled({ PAYWALL_ENABLED: "false" }), false);
+  assert.equal(paywallEnabled({ PAYWALL_ENABLED: "true" }), true);
+  assert.equal(OPEN_ACCESS.unlocked, true);
 });
