@@ -1,5 +1,4 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { Resend } from "resend";
@@ -119,25 +118,16 @@ function verifyAppleIdentityTokenWithKey(
   return claims as AppleIdentityClaims & { sub: string };
 }
 
+// Use the shared admin app (lib/firebase-admin). This used to initialise the
+// *default* app only when no Firebase app existed, so once the named shared app
+// had been created first (e.g. by the paywall routes), getAuth() on the missing
+// default app threw and email verification, Apple sign-in and account deletion
+// all returned 500.
 function getFirebaseAdminAuth() {
-  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-  if (!clientEmail || !privateKey) {
-    throw new Error("Email verification is not configured.");
+  if (!process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+    throw new Error("Firebase admin is not configured.");
   }
-
-  if (getApps().length === 0) {
-    initializeApp({
-      credential: cert({
-        projectId: "gopacknow-83d54",
-        clientEmail,
-        privateKey,
-      }),
-    });
-  }
-
-  return getAuth();
+  return getAuth(getAdminApp());
 }
 
 function getResendClient() {
