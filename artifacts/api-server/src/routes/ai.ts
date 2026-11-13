@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
+import { OFF_AREA_KM, applyReplacements, findOffAreaActivities, type Replacement } from "../lib/itinerary-geo";
 import { randomUUID } from "node:crypto";
 import { callAnthropic } from "../lib/anthropic";
 import { itineraryTool, itineraryResponseText, ITINERARY_TOOL, type ItineraryAiResponse } from "../lib/itinerary-output";
@@ -254,6 +255,59 @@ Respond with ONLY a JSON array, one object per duplicate slot IN THE SAME ORDER 
     log.error({ err }, "Dedup repair pass threw, keeping itinerary with duplicates");
     return itinerary;
   }
+}
+
+/**
+ * Replaces AI-picked venues that are far from the rest of their day (e.g. a
+ * Dammam restaurant on a Riyadh day). Replacements are only accepted if their
+ * own coordinates fall inside the day's area; otherwise the original stays.
+ */
+async function relocateOffAreaActivities(
+  itinerary: ItineraryShape,
+  destination: string,
+  log: { warn: (obj: object, msg: string) => void; info?: (obj: object, msg: string) => void },
+  signal?: AbortSignal,
+): Promise<ItineraryShape> {
+  const shape = itinerary as unknown as Parameters<typeof findOffAreaActivities>[0];
+  for (let round = 0; round < 2; round++) {
+    const slots = findOffAreaActivities(shape);
+    if (slots.length === 0) return itinerary;
+    log.warn({ round, slots: slots.map((s) => ({ day: s.dayNumber, name: s.name, km: s.distanceKm })) }, "Itinerary has venues outside their day's city; repairing");
+
+    const usedNames = [...new Set(shape.days.flatMap((d) => d.activities.map((a) => String(a.name ?? ""))))];
+    const prompt = `Some venues in this ${destination} itinerary are in the WRONG CITY for their day. Replace each one below with a real venue that is inside the day's city, within ${OFF_AREA_KM} km of the given centre coordinates.
+
+${slots.map((s, i) => `${i + 1}. Day ${s.dayNumber} (${s.city}), ${s.time}: "${s.name}" (tag: ${s.tag}) is ${s.distanceKm} km away from the rest of the day. Replace it with a ${s.tag} venue in ${s.city} near lat ${s.center.lat.toFixed(4)}, lng ${s.center.lng.toFixed(4)}. Other activities that day: ${s.otherNames.map((n) => `"${n}"`).join(", ")}.`).join("\n")}
+
+Do NOT reuse any of these names: ${usedNames.map((n) => `"${n}"`).join(", ")}.
+Each replacement must be a real, well-known, currently operating place in that exact city that can be found on Google Maps, with its accurate coordinates. Never invent a name.
+
+Respond with ONLY a JSON array in the same order, one object per item: {"name": "...", "description": "one tip, max 12 words", "photoQuery": "3-5 words", "lat": 0.0, "lng": 0.0, "estimatedCost": 0}. No markdown.`;
+
+    try {
+      const response = await callAnthropic({
+        model: "claude-haiku-4-5",
+        max_tokens: 4096,
+        system: "You are a JSON API. Always respond with only a valid JSON array. No preamble, no explanation, no markdown code blocks.",
+        messages: [{ role: "user", content: prompt }],
+      }, 3, {}, signal);
+      const data = await (response as unknown as globalThis.Response).json() as { content?: Array<{ type: string; text?: string }> };
+      if (!(response as unknown as globalThis.Response).ok) {
+        log.warn({ data }, "Location repair call failed; keeping itinerary as is");
+        return itinerary;
+      }
+      const text = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
+      const replacements = extractAndParseJson(text) as Replacement[];
+      if (!Array.isArray(replacements)) return itinerary;
+      const applied = applyReplacements(shape, slots, replacements);
+      if (applied === 0) return itinerary;
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      log.warn({ err }, "Location repair threw; keeping itinerary as is");
+      return itinerary;
+    }
+  }
+  return itinerary;
 }
 
 type GenerationFeature = "itinerary" | "packing" | "redo-activity" | "suggest-destinations" | "map-activity";
@@ -530,6 +584,7 @@ ${vibeGuide}
 
 ━━━ STRICT RULES ━━━
 0. LOCATION LOCK — Every single activity, restaurant, venue, and experience MUST be physically located in or immediately around ${destination}. Do NOT suggest activities in other cities, regions, or countries, even as a day trip. If a wish mentions a place outside ${destination}, adapt the spirit of it to something available in ${destination} instead.
+0a. COUNTRY OR REGION DESTINATIONS — If ${destination} is a country or large region rather than a single city, first choose the specific city for each day, set it as that day's "city", and then use ONLY venues inside that city for the whole day. Changing cities is only allowed between days, never within a day.
 0b. SAME-AREA CLUSTERING — All activities within a SINGLE day must be in the same city and reasonably close to each other (same neighborhood/district, or at most a short taxi/metro ride apart — never a multi-hour drive or a trip requiring leaving the metro area). Order the day's activities so they flow geographically (e.g. don't bounce from the north side of town to the south and back). Every activity's "city" for that day must exactly match the day's declared "city" field — never mix venues from a different town, suburb, or region into a day assigned to another city.
 1. The "days" array MUST have EXACTLY ${days} elements numbered 1–${days}.
 2. Each day MUST have AT LEAST ${activitiesPerDay} activities (pace: ${pace}). This is the normal daily minimum, not a maximum: add activities beyond it whenever needed to retain every guaranteed wish.
@@ -656,7 +711,12 @@ IMPORTANT RETRY: The previous plan failed validation: ${firstParseError instance
         );
       }
     }
-    const dedupedItinerary = await dedupeItineraryVenues(itinerary, destination, req.log, generationSignal);
+    const dedupedItinerary = await relocateOffAreaActivities(
+      await dedupeItineraryVenues(itinerary, destination, req.log, generationSignal),
+      destination,
+      req.log,
+      generationSignal,
+    );
     // Keep the invariant true after post-processing as well as after the
     // model response. This also protects future itinerary repair passes.
     res.json(parseItineraryResponse(JSON.stringify(dedupedItinerary), {
