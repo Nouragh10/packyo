@@ -5,6 +5,7 @@ import { runTransaction } from "firebase/database";
 import { apiFetch } from "@/lib/api-client";
 import { track } from "@/lib/analytics";
 import { classifyActivity, keySegment, normalizeCity } from "@/lib/activity-classifier";
+import { placesForStorage, type TripPlace } from "@/lib/places";
 
 /* ── Interfaces ───────────────────────────────────────────────────── */
 
@@ -69,6 +70,8 @@ export interface Trip {
   currency?: string;
   id: string;
   destination: string;
+  /** The real places picked for this trip (newer app versions). */
+  places?: TripPlace[];
   days: number;
   vibes: string[];
   budget: string;
@@ -1217,6 +1220,7 @@ export async function submitTripReview(
 
 export async function createTrip(data: {
   destination: string;
+  places?: TripPlace[];
   days: number;
   vibes: string[];
   budget: string;
@@ -1254,6 +1258,12 @@ export async function createTrip(data: {
   };
 
   await set(newTripRef, tripData);
+  if (data.places?.length) {
+    // Saved separately so a database rule that doesn't know `places` yet can
+    // never block trip creation; the server can still look the name up.
+    await set(ref(db, `trips/${tripId}/places`), placesForStorage(data.places))
+      .catch((e) => console.warn("Couldn't save trip places", e));
+  }
 
   const currentUser = auth.currentUser;
   if (!currentUser || currentUser.uid !== data.uid) {
@@ -1709,6 +1719,7 @@ export async function unlockDestinationVotes(tripId: string, uid: string) {
 export async function confirmDestination(tripId: string, name: string) {
   await update(ref(db, `trips/${tripId}`), {
     destination: name,
+    places: null,
     destinationSuggestions: null,
     destinationVotes: null,
     destinationLockedBy: null,
@@ -1725,6 +1736,7 @@ export async function chooseDestinationWithAi(
 ) {
   await update(ref(db, `trips/${tripId}`), {
     destination: name,
+    places: null,
     aiDestinationDecision: {
       suggestionIndex,
       name,

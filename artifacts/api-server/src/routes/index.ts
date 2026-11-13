@@ -4,6 +4,7 @@ import aiRouter from "./ai";
 import authRouter from "./auth";
 import expensesRouter from "./expenses";
 import itineraryUnlockRouter from "./itinerary-unlock";
+import placesRouter from "./places";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(aiRouter);
 router.use(authRouter);
 router.use(expensesRouter);
 router.use(itineraryUnlockRouter);
+router.use(placesRouter);
 
 export default router;

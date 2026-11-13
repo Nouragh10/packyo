@@ -22,6 +22,8 @@ export type OffAreaSlot = {
   distanceKm: number;
   center: { lat: number; lng: number };
   otherNames: string[];
+  /** "day" = far from the rest of its day; "trip" = outside every place the group chose. */
+  reason?: "day" | "trip";
 };
 
 export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -81,9 +83,59 @@ export function findOffAreaActivities(itinerary: ItineraryLike, maxKm = OFF_AREA
         distanceKm: Math.round(distanceKm),
         center,
         otherNames: day.activities.filter((_, i) => i !== activityIndex).map((a) => String(a.name ?? "")),
+        reason: "day",
       });
     });
   });
+  return out;
+}
+
+/**
+ * AI-picked activities outside every place the group chose (e.g. a Dammam
+ * venue on a Riyadh-only trip, even when the whole day drifted there).
+ * `isInside` decides membership; `centerFor` gives the place the day should be in.
+ */
+export function findOutsideTripActivities(
+  itinerary: ItineraryLike,
+  isInside: (p: { lat: number; lng: number }) => boolean,
+  centerFor: (day: Day, p: { lat: number; lng: number }) => { lat: number; lng: number; name: string } | undefined,
+): OffAreaSlot[] {
+  const out: OffAreaSlot[] = [];
+  itinerary.days.forEach((day, dayIndex) => {
+    day.activities.forEach((act, activityIndex) => {
+      if (act.fromWish === true) return;
+      const p = coordsOf(act);
+      if (!p || isInside(p)) return;
+      const target = centerFor(day, p);
+      if (!target) return;
+      out.push({
+        dayIndex,
+        activityIndex,
+        dayNumber: Number(day.dayNumber ?? dayIndex + 1),
+        city: target.name,
+        time: String(act.time ?? ""),
+        name: String(act.name ?? ""),
+        tag: String(act.tag ?? ""),
+        distanceKm: Math.round(haversineKm(target, p)),
+        center: { lat: target.lat, lng: target.lng },
+        otherNames: day.activities.filter((_, i) => i !== activityIndex).map((a) => String(a.name ?? "")),
+        reason: "trip",
+      });
+    });
+  });
+  return out;
+}
+
+/** Merges slot lists, keeping the first slot found for each activity. */
+export function mergeSlots(...lists: OffAreaSlot[][]): OffAreaSlot[] {
+  const seen = new Set<string>();
+  const out: OffAreaSlot[] = [];
+  for (const s of lists.flat()) {
+    const k = `${s.dayIndex}:${s.activityIndex}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+  }
   return out;
 }
 
@@ -92,21 +144,24 @@ export type Replacement = {
 };
 
 /**
- * Applies replacements in slot order, but only those whose own coordinates land
- * within `maxKm` of the day's centre. Returns how many were applied.
+ * Applies replacements in slot order, but only those whose own coordinates are
+ * acceptable: by default within `maxKm` of the slot's centre. Returns how many
+ * were applied.
  */
 export function applyReplacements(
   itinerary: ItineraryLike,
   slots: OffAreaSlot[],
   replacements: Replacement[],
   maxKm = OFF_AREA_KM,
+  accept?: (p: { lat: number; lng: number }, slot: OffAreaSlot) => boolean,
 ): number {
   let applied = 0;
   slots.forEach((slot, i) => {
     const r = replacements[i];
     if (!r || typeof r.name !== "string" || !r.name.trim()) return;
     const p = coordsOf(r);
-    if (!p || haversineKm(slot.center, p) > maxKm) return;
+    if (!p) return;
+    if (accept ? !accept(p, slot) : haversineKm(slot.center, p) > maxKm) return;
     const act = itinerary.days[slot.dayIndex]?.activities[slot.activityIndex];
     if (!act) return;
     act.name = r.name.trim();

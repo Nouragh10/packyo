@@ -1,5 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { OFF_AREA_KM, applyReplacements, findOffAreaActivities, type Replacement } from "../lib/itinerary-geo";
+import { googleKey } from "../lib/google-places";
+import { OFF_AREA_KM, applyReplacements, coordsOf, findOffAreaActivities, findOutsideTripActivities, haversineKm, mergeSlots, type OffAreaSlot, type Replacement } from "../lib/itinerary-geo";
+import { findReplacementVenue, findVenue, insideAnyPlace, normalizeName, nearestPlace, placeContains, placeForCity, resolveDestinationPlaces, sanitizePlaces, type TripPlace } from "../lib/places";
 import { randomUUID } from "node:crypto";
 import { callAnthropic } from "../lib/anthropic";
 import { itineraryTool, itineraryResponseText, ITINERARY_TOOL, type ItineraryAiResponse } from "../lib/itinerary-output";
@@ -267,17 +269,29 @@ async function relocateOffAreaActivities(
   destination: string,
   log: { warn: (obj: object, msg: string) => void; info?: (obj: object, msg: string) => void },
   signal?: AbortSignal,
+  places: TripPlace[] = [],
 ): Promise<ItineraryShape> {
   const shape = itinerary as unknown as Parameters<typeof findOffAreaActivities>[0];
+  const fenced = places.length > 0;
+  const centerFor = (day: { city?: unknown }, p: { lat: number; lng: number }) => {
+    const place = placeForCity(places, String(day.city ?? "")) ?? nearestPlace(places, p);
+    return place ? { lat: place.lat, lng: place.lng, name: place.name } : undefined;
+  };
+  // Inside the group's places, and (for "far from its day" slots) near the day too.
+  const accept = (p: { lat: number; lng: number }, slot: OffAreaSlot) =>
+    (!fenced || insideAnyPlace(places, p)) && (slot.reason === "trip" || haversineKm(slot.center, p) <= OFF_AREA_KM);
   for (let round = 0; round < 2; round++) {
-    const slots = findOffAreaActivities(shape);
+    const slots = mergeSlots(
+      fenced ? findOutsideTripActivities(shape, (p) => insideAnyPlace(places, p), centerFor) : [],
+      findOffAreaActivities(shape),
+    );
     if (slots.length === 0) return itinerary;
     log.warn({ round, slots: slots.map((s) => ({ day: s.dayNumber, name: s.name, km: s.distanceKm })) }, "Itinerary has venues outside their day's city; repairing");
 
     const usedNames = [...new Set(shape.days.flatMap((d) => d.activities.map((a) => String(a.name ?? ""))))];
     const prompt = `Some venues in this ${destination} itinerary are in the WRONG CITY for their day. Replace each one below with a real venue that is inside the day's city, within ${OFF_AREA_KM} km of the given centre coordinates.
 
-${slots.map((s, i) => `${i + 1}. Day ${s.dayNumber} (${s.city}), ${s.time}: "${s.name}" (tag: ${s.tag}) is ${s.distanceKm} km away from the rest of the day. Replace it with a ${s.tag} venue in ${s.city} near lat ${s.center.lat.toFixed(4)}, lng ${s.center.lng.toFixed(4)}. Other activities that day: ${s.otherNames.map((n) => `"${n}"`).join(", ")}.`).join("\n")}
+${slots.map((s, i) => `${i + 1}. Day ${s.dayNumber} (${s.city}), ${s.time}: "${s.name}" (tag: ${s.tag}) is ${s.distanceKm} km away from ${s.reason === "trip" ? `${s.city}, outside the places this group chose to visit` : "the rest of the day"}. Replace it with a ${s.tag} venue in ${s.city} near lat ${s.center.lat.toFixed(4)}, lng ${s.center.lng.toFixed(4)}. Other activities that day: ${s.otherNames.map((n) => `"${n}"`).join(", ")}.`).join("\n")}
 
 Do NOT reuse any of these names: ${usedNames.map((n) => `"${n}"`).join(", ")}.
 Each replacement must be a real, well-known, currently operating place in that exact city that can be found on Google Maps, with its accurate coordinates. Never invent a name.
@@ -299,13 +313,148 @@ Respond with ONLY a JSON array in the same order, one object per item: {"name": 
       const text = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
       const replacements = extractAndParseJson(text) as Replacement[];
       if (!Array.isArray(replacements)) return itinerary;
-      const applied = applyReplacements(shape, slots, replacements);
+      const applied = applyReplacements(shape, slots, replacements, OFF_AREA_KM, accept);
       if (applied === 0) return itinerary;
     } catch (err) {
       if (signal?.aborted) throw err;
       log.warn({ err }, "Location repair threw; keeping itinerary as is");
       return itinerary;
     }
+  }
+  return itinerary;
+}
+
+/**
+ * Checks AI-picked venues against OpenStreetMap inside the group's places.
+ * Venues found there get their real coordinates. The rest get one web-search
+ * check: real places stay, invented or misplaced ones are swapped for real
+ * venues in the same place (accepted only if their coordinates are inside it).
+ */
+async function verifyVenuesExist(
+  itinerary: ItineraryShape,
+  places: TripPlace[],
+  log: { warn: (obj: object, msg: string) => void; info?: (obj: object, msg: string) => void },
+  signal: AbortSignal,
+  deadline: number,
+): Promise<ItineraryShape> {
+  if (places.length === 0) return itinerary;
+  const shape = itinerary as unknown as Parameters<typeof findOffAreaActivities>[0];
+  type Item = { dayIndex: number; activityIndex: number; dayNumber: number; place: TripPlace; act: Record<string, unknown>; name: string };
+  const items: Item[] = [];
+  shape.days.forEach((day, dayIndex) => day.activities.forEach((act, activityIndex) => {
+    if (act.fromWish === true) return;
+    const name = String(act.name ?? "").trim();
+    if (!name) return;
+    const p = coordsOf(act);
+    const place = placeForCity(places, String(day.city ?? ""))
+      ?? (p ? places.find((pl) => placeContains(pl, p)) ?? nearestPlace(places, p) : places[0]);
+    if (place) items.push({ dayIndex, activityIndex, dayNumber: Number(day.dayNumber ?? dayIndex + 1), place, act, name });
+  }));
+  if (items.length === 0) return itinerary;
+
+  // 1) Map lookups (Google when configured, else OpenStreetMap), a few at a
+  //    time, capped at 15 seconds overall.
+  const lookupEnd = Date.now() + 15_000;
+  const found: Array<{ lat: number; lng: number; closed?: boolean } | null> = new Array(items.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length && Date.now() < lookupEnd && !signal.aborted) {
+      const i = next++;
+      try {
+        found[i] = await findVenue(items[i].name, items[i].place, fetch, Math.max(1000, Math.min(6000, lookupEnd - Date.now())));
+      } catch { /* treat as not found */ }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, items.length) }, worker));
+  let unverified: Item[] = [];
+  items.forEach((it, i) => {
+    const f = found[i];
+    if (f && !f.closed) { it.act.lat = f.lat; it.act.lng = f.lng; } else unverified.push(it);
+  });
+  log.info?.({ checked: items.length, onMap: items.length - unverified.length, google: !!googleKey() }, "Itinerary venues checked against the map");
+  if (unverified.length === 0) return itinerary;
+
+  // 1b) With Google, swap anything it doesn't know (or knows is closed) for a
+  //     real, open place of the same kind in the same town.
+  if (googleKey()) {
+    const used = new Set(shape.days.flatMap((d) => d.activities.map((a) => normalizeName(String(a.name ?? "")))));
+    const swapEnd = Date.now() + 15_000;
+    const left: Item[] = [];
+    for (const it of unverified) {
+      if (Date.now() > swapEnd || signal.aborted) { left.push(it); continue; }
+      try {
+        const v = await findReplacementVenue(String(it.act.tag ?? ""), it.name, it.place, used, fetch, Math.max(1000, Math.min(6000, swapEnd - Date.now())));
+        if (!v) { left.push(it); continue; }
+        used.add(normalizeName(v.name));
+        it.act.name = v.name;
+        it.act.lat = v.lat;
+        it.act.lng = v.lng;
+        it.act.description = [v.type ?? "Local spot", v.rating ? `rated ${v.rating} on Google` : "", v.address ?? ""].filter(Boolean).join(" · ").slice(0, 120);
+        it.act.photoQuery = `${v.name} ${it.place.name}`;
+      } catch { left.push(it); }
+    }
+    log.info?.({ replaced: unverified.length - left.length, left: left.length }, "Replaced unmapped venues with real Google places");
+    unverified = left;
+    if (unverified.length === 0) return itinerary;
+  }
+
+  // 2) One web-search pass for venues the map didn't know. Food and nightlife
+  //    spots are the ones most often invented, so they go first.
+  const remaining = deadline - Date.now();
+  if (remaining < 25_000) {
+    log.warn({ unverified: unverified.length, remaining }, "No time left to web-check unmapped venues");
+    return itinerary;
+  }
+  const risky = (t: unknown) => /food|night|cafe|drink/i.test(String(t ?? ""));
+  const toCheck = [...unverified].sort((a, b) => Number(risky(b.act.tag)) - Number(risky(a.act.tag))).slice(0, 12);
+  const prompt = `You are checking a group trip itinerary for places that do not exist. The group is visiting: ${places.map((p) => p.label).join(" + ")}.
+
+These venues could not be found on OpenStreetMap, so some may be invented. Use web_search to check each one:
+${toCheck.map((it, i) => `${i + 1}. Day ${it.dayNumber}, ${String(it.act.time ?? "")} in ${it.place.label}: "${it.name}" (tag: ${String(it.act.tag ?? "")})`).join("\n")}
+
+For each item:
+- If it is a real, currently operating place located in that town/city, answer {"exists": true}.
+- If it does not exist, has closed, or is somewhere else, answer {"exists": false, "name": "...", "description": "one tip, max 12 words", "photoQuery": "3-5 words", "lat": 0.0, "lng": 0.0, "estimatedCost": 0} with a REAL replacement of the same kind in that same town/city that your searches confirm, with accurate coordinates.
+- In small towns where you cannot confirm a specific business, use a real public place (beach, corniche, island, old town, park, viewpoint, heritage site) or an honest descriptive title such as "Fresh seafood lunch on the Umluj corniche" with coordinates in the town centre. Never invent a business name.
+
+Your FINAL message must be ONLY a JSON array with one object per item, in the same order. No markdown.`;
+
+  try {
+    const response = await callAnthropic({
+      model: "claude-sonnet-4-5",
+      max_tokens: 4096,
+      system: "You are a fact-checking JSON API with web search access. Search first, then your FINAL message must be only a valid JSON array, starting with [.",
+      messages: [{ role: "user", content: prompt }],
+      tools: [{ type: "web_search_20250305", name: "web_search", max_uses: Math.min(15, toCheck.length + 3) }],
+    }, 1, { "anthropic-beta": "web-search-2025-03-05" }, AbortSignal.any([signal, AbortSignal.timeout(Math.min(60_000, remaining - 15_000))]));
+    const data = await (response as unknown as globalThis.Response).json() as { content?: Array<{ type: string; text?: string }> };
+    if (!(response as unknown as globalThis.Response).ok) {
+      log.warn({ data }, "Venue existence check failed; keeping itinerary as is");
+      return itinerary;
+    }
+    const texts = (data.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "");
+    const verdicts = extractAndParseJson(texts[texts.length - 1] ?? "") as Array<Replacement & { exists?: unknown }>;
+    if (!Array.isArray(verdicts)) return itinerary;
+    const slots: OffAreaSlot[] = [];
+    const replacements: Replacement[] = [];
+    toCheck.forEach((it, i) => {
+      const v = verdicts[i];
+      if (!v || v.exists !== false) return;
+      slots.push({
+        dayIndex: it.dayIndex, activityIndex: it.activityIndex, dayNumber: it.dayNumber, city: it.place.name,
+        time: String(it.act.time ?? ""), name: it.name, tag: String(it.act.tag ?? ""), distanceKm: 0,
+        center: { lat: it.place.lat, lng: it.place.lng }, otherNames: [], reason: "trip",
+      });
+      replacements.push(v);
+    });
+    const applied = applyReplacements(shape, slots, replacements, OFF_AREA_KM, (p, slot) => {
+      const place = places.find((pl) => pl.name === slot.city);
+      return place ? placeContains(place, p) : insideAnyPlace(places, p);
+    });
+    log.info?.({ checked: toCheck.length, flagged: slots.length, replaced: applied }, "Web-checked unmapped venues");
+  } catch (err) {
+    if (signal.aborted) throw err;
+    log.warn({ err }, "Venue existence check threw; keeping itinerary as is");
   }
   return itinerary;
 }
@@ -493,6 +642,20 @@ router.post("/itinerary", async (req: Request, res: Response): Promise<void> => 
 
   const { destination, days, vibes, budget, startDate } = parsed.data;
   const pace = (req.body as { pace?: string }).pace ?? "balanced";
+
+  // The real places the group picked (newer apps send them; for older apps
+  // and voted destinations, look the text up). They fence the whole plan.
+  const sentPlaces = sanitizePlaces((req.body as { places?: unknown }).places);
+  const places = sentPlaces.length > 0
+    ? sentPlaces
+    : await resolveDestinationPlaces(destination).catch(() => [] as TripPlace[]);
+  const tripPlaces = places.length > 0 ? places.map((p) => p.label).join(" + ") : destination;
+  const kindWord = (k: TripPlace["kind"]) => k === "region" ? "region" : k === "area" ? "district" : k;
+  const placesBlock = places.length === 0 ? "" : `
+━━━ THE GROUP'S CHOSEN PLACES — the ONLY places this trip may use ━━━
+${places.map((p, i) => `${i + 1}. ${p.label} (${kindWord(p.kind)}) — centre lat ${p.lat.toFixed(4)}, lng ${p.lng.toFixed(4)}${p.bbox ? `; area roughly lat ${p.bbox[0].toFixed(2)} to ${p.bbox[2].toFixed(2)}, lng ${p.bbox[1].toFixed(2)} to ${p.bbox[3].toFixed(2)}` : ""}`).join("\n")}
+${places.length > 1 ? `The group is visiting ALL ${places.length} places. Split the ${days} days between them in the order listed (more days for bigger places), give every place at least one day when there are enough days, and set each day's "city" to the place the group is in that day (for a country or region, a specific city inside it).\n` : ""}Every activity's lat/lng must be inside one of these places. Anything outside them is removed automatically.
+`;
   const activitiesPerDay = pace === "relaxed" ? 3 : pace === "packed" ? 7 : 5;
 
   // Support both new two-tier format (guaranteed + candidates) and legacy wishes array.
@@ -548,17 +711,17 @@ router.post("/itinerary", async (req: Request, res: Response): Promise<void> => 
 
   const totalActivities = days * activitiesPerDay;
 
-  const prompt = `You are a world-class group travel planner. Generate a detailed ${days}-day itinerary for a group trip to ${destination}.
+  const prompt = `You are a world-class group travel planner. Generate a detailed ${days}-day itinerary for a group trip to ${tripPlaces}.
 
 Trip details:
-- Destination: ${destination}
+- Destination: ${tripPlaces}
 - Duration: ${days} days (EXACTLY — never more, never fewer)
 - Group vibes: ${vibes.join(", ")}
 - Budget level: ${budget}
 ${startDate ? `- Start date: ${startDate}` : ""}
-
+${placesBlock}
 ${(guaranteedList.length === 0 && candidateList.length === 0) ? `━━━ NO WISHES PROVIDED — FULL AI ITINERARY ━━━
-The group has not added any wishes yet. Generate a world-class, opinionated itinerary for ${destination} entirely from your own expertise. Base every activity on the group's vibes (${vibes.join(", ")}) and budget level (${budget}). Every activity must use "fromWish": false and "suggester": "AI pick".` : `━━━ SECTION A — GROUP WISHES (two-tier, priority-ordered) ━━━
+The group has not added any wishes yet. Generate a world-class, opinionated itinerary for ${tripPlaces} entirely from your own expertise. Base every activity on the group's vibes (${vibes.join(", ")}) and budget level (${budget}). Every activity must use "fromWish": false and "suggester": "AI pick".` : `━━━ SECTION A — GROUP WISHES (two-tier, priority-ordered) ━━━
 
 TIER 1 — GUARANTEED (non-negotiable):
 These wishes were democratically selected by the group and MUST all appear as real named activities in the itinerary — every single one, no exceptions:
@@ -583,13 +746,14 @@ Vibe inspiration guide:
 ${vibeGuide}
 
 ━━━ STRICT RULES ━━━
-0. LOCATION LOCK — Every single activity, restaurant, venue, and experience MUST be physically located in or immediately around ${destination}. Do NOT suggest activities in other cities, regions, or countries, even as a day trip. If a wish mentions a place outside ${destination}, adapt the spirit of it to something available in ${destination} instead.
-0a. COUNTRY OR REGION DESTINATIONS — If ${destination} is a country or large region rather than a single city, first choose the specific city for each day, set it as that day's "city", and then use ONLY venues inside that city for the whole day. Changing cities is only allowed between days, never within a day.
+0. LOCATION LOCK — Every single activity, restaurant, venue, and experience MUST be physically located in or immediately around ${tripPlaces}. Do NOT suggest activities in other cities, regions, or countries, even as a day trip. If a wish mentions a place outside ${tripPlaces}, adapt the spirit of it to something available in ${tripPlaces} instead.
+0a. COUNTRY OR REGION DESTINATIONS — If ${tripPlaces} is a country or large region rather than a single city, first choose the specific city for each day, set it as that day's "city", and then use ONLY venues inside that city for the whole day. Changing cities is only allowed between days, never within a day.
 0b. SAME-AREA CLUSTERING — All activities within a SINGLE day must be in the same city and reasonably close to each other (same neighborhood/district, or at most a short taxi/metro ride apart — never a multi-hour drive or a trip requiring leaving the metro area). Order the day's activities so they flow geographically (e.g. don't bounce from the north side of town to the south and back). Every activity's "city" for that day must exactly match the day's declared "city" field — never mix venues from a different town, suburb, or region into a day assigned to another city.
 1. The "days" array MUST have EXACTLY ${days} elements numbered 1–${days}.
 2. Each day MUST have AT LEAST ${activitiesPerDay} activities (pace: ${pace}). This is the normal daily minimum, not a maximum: add activities beyond it whenever needed to retain every guaranteed wish.
 3. Every activity's "tag" must be one of: ${validTags.join(", ")}.
-4. REAL VENUES ONLY — Every activity "name" must be a real, verifiable place that actually exists in ${destination} and can be found on Google Maps. Only use venues you are highly confident exist: famous landmarks, well-known restaurants, major museums, established bars, popular parks. If you are not certain a specific venue exists, use a well-known category anchor instead (e.g. "Mercado de San Miguel" not an invented market name). Never invent a venue name. Generic titles are also forbidden — "Famous Cathedral" is as bad as a made-up name.
+4. REAL VENUES ONLY — Every activity "name" must be a real, verifiable place that actually exists in ${tripPlaces} and can be found on Google Maps. Only use venues you are highly confident exist: famous landmarks, well-known restaurants, major museums, established bars, popular parks. If you are not certain a specific venue exists, use a well-known category anchor instead (e.g. "Mercado de San Miguel" not an invented market name). Never invent a venue name. Generic titles are also forbidden — "Famous Cathedral" is as bad as a made-up name (except the honest descriptive meal titles allowed in rule 4a).
+4a. SMALL TOWNS & LESSER-KNOWN PLACES — In small towns, villages, islands and lesser-known areas (e.g. Umluj or the villages around AlUla) you will not know many specific businesses. NEVER make up a restaurant, café or shop name to fill a slot. Use real public places you are sure exist there (beaches, corniches, islands, old towns, heritage sites, parks, viewpoints, nature reserves). For a meal where you can't name a real restaurant with certainty, use an honest descriptive title such as "Fresh seafood lunch on the Umluj corniche" with coordinates in the town centre. An honest description is always better than an invented name.
 5. OPEN & OPERATING — Only suggest venues that are currently open and operating as of 2025. Do NOT suggest venues that are permanently closed, demolished, under indefinite closure, or no longer in business. Restaurants and cafes close far more often than museums or landmarks — for any "food" or dining-related activity, strongly prefer iconic, long-established institutions (10+ years operating) that you are highly confident are still open, rather than trendy, small, or recently-opened spots you're less certain about. If unsure, choose a well-known alternative that you are confident about.
 6. Descriptions: ONE sentence, max 15 words.
 7. NO REPEATS ACROSS THE WHOLE TRIP — Never use the same venue name twice anywhere in the itinerary, across ANY day, not just within a single day. Track every venue name you've already used across all previous days and pick a different one each time. Also avoid repeating the same narrow activity type (e.g. two ramen shops, two rooftop bars) more than once per day.
@@ -645,6 +809,7 @@ Respond with ONLY valid JSON in this exact format (no markdown, no extra text):
   try {
     // Bound initial generation and any repairs below the mobile request budget.
     const generationSignal = AbortSignal.timeout(150_000);
+    const generationDeadline = Date.now() + 150_000;
     const body = {
       model: "claude-haiku-4-5",
       max_tokens: Math.min(24000, Math.max(8192, days * 2200)),
@@ -711,12 +876,14 @@ IMPORTANT RETRY: The previous plan failed validation: ${firstParseError instance
         );
       }
     }
-    const dedupedItinerary = await relocateOffAreaActivities(
-      await dedupeItineraryVenues(itinerary, destination, req.log, generationSignal),
-      destination,
+    const locatedItinerary = await relocateOffAreaActivities(
+      await dedupeItineraryVenues(itinerary, tripPlaces, req.log, generationSignal),
+      tripPlaces,
       req.log,
       generationSignal,
+      places,
     );
+    const dedupedItinerary = await verifyVenuesExist(locatedItinerary, places, req.log, generationSignal, generationDeadline);
     // Keep the invariant true after post-processing as well as after the
     // model response. This also protects future itinerary repair passes.
     res.json(parseItineraryResponse(JSON.stringify(dedupedItinerary), {
