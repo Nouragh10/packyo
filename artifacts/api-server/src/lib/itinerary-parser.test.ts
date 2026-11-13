@@ -170,7 +170,12 @@ before(async () => {
   process.env.LOG_LEVEL = "silent";
 
   originalFetch = globalThis.fetch;
-  globalThis.fetch = async (_url, init) => {
+  globalThis.fetch = async (url, init) => {
+    // Place lookups (destination fencing) find nothing here, so these tests
+    // exercise the AI flow exactly as before.
+    if (/photon\.komoot|open-meteo/.test(String(url))) {
+      return new Response(JSON.stringify({ features: [], results: [] }), { status: 200 });
+    }
     fetchCalls += 1;
     lastAiRequest = JSON.parse(String(init?.body ?? "{}"));
     if (aiError) throw aiError;
@@ -298,4 +303,35 @@ test("upstream timeout returns a recoverable response instead of an unhandled co
   } finally {
     aiError = null;
   }
+});
+
+test("chosen places fence the itinerary: an out-of-area venue is replaced and invented ones are web-checked", async () => {
+  fetchCalls = 0;
+  const lisbon = { id: "l", name: "Lisbon", kind: "city", country: "Portugal", countryCode: "PT", label: "Lisbon, Portugal", lat: 38.7223, lng: -9.1393, bbox: [38.69, -9.23, 38.8, -9.09] };
+  const plan = {
+    title: "Lisbon",
+    days: [{ dayNumber: 1, city: "Lisbon", theme: "Old town", activities: [
+      { name: "Belem Tower", tag: "culture", lat: 38.6916, lng: -9.216 },
+      { name: "Porto Wine Cellar", tag: "culture", lat: 41.137, lng: -8.613 },
+      { name: "Casa Inventada", tag: "culture", lat: 38.712, lng: -9.14 },
+    ] }],
+  };
+  aiResponses = [
+    JSON.stringify(plan),
+    // relocation pass: Porto venue swapped for one inside Lisbon
+    JSON.stringify([{ name: "Alfama Viewpoint", lat: 38.711, lng: -9.13, description: "Go at sunset." }]),
+    // web check of venues the map didn't know: the third was invented
+    JSON.stringify([{ exists: true }, { exists: true }, { exists: false, name: "Time Out Market", lat: 38.707, lng: -9.146 }]),
+  ];
+  const response = await originalFetch(`${baseUrl}/api/itinerary`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ destination: "Lisbon", places: [lisbon], days: 1, vibes: ["Culture"], budget: "midrange", pace: "relaxed" }),
+  });
+  assert.equal(response.status, 200);
+  const itinerary = await response.json() as { days: Array<{ activities: Array<{ name: string }> }> };
+  assert.deepEqual(itinerary.days[0].activities.map((a) => a.name), ["Belem Tower", "Alfama Viewpoint", "Time Out Market"]);
+  assert.equal(fetchCalls, 3);
+  const prompt = JSON.stringify(lastAiRequest);
+  assert.match(prompt, /web_search/);
 });

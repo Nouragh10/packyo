@@ -103,6 +103,8 @@ export default function BuildingScreen() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             destination: trip.destination,
+            // The real places picked at creation; the server fences the plan to them.
+            places: trip.places ?? [],
             days: resolvedDays,
             vibes: resolvedVibes,
             budget: trip.budget ?? "midrange",

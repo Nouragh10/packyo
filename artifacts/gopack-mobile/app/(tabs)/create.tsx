@@ -24,6 +24,8 @@ import {
   type PackyoSettings,
 } from "@/lib/settings";
 import { apiFetch } from "@/lib/api-client";
+import { PlacePicker } from "@/components/PlacePicker";
+import { destinationFromPlaces, searchPlaces, type TripPlace } from "@/lib/places";
 
 const VIBES = [
   "Relaxing", "Adventure", "Foodie",
@@ -58,7 +60,7 @@ export default function CreateScreen() {
   const router = useRouter();
   const { prefillDestination } = useLocalSearchParams<{ prefillDestination?: string }>();
 
-  const [destination, setDestination] = useState("");
+  const [places, setPlaces] = useState<TripPlace[]>([]);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [datePicker, setDatePicker] = useState<"start" | "end" | null>(null);
@@ -72,9 +74,18 @@ export default function CreateScreen() {
   const { packs } = usePacks(user?.uid);
 
   useEffect(() => {
-    if (prefillDestination) {
-      setDestination(prefillDestination);
-    }
+    // Destinations opened from Discover arrive as text: turn them into the
+    // matching real place so the trip is fenced like any other.
+    if (!prefillDestination) return;
+    let active = true;
+    searchPlaces(prefillDestination)
+      .then((found) => {
+        const wanted = prefillDestination.split(",")[0].trim().toLowerCase();
+        const match = found.find((p) => p.name.toLowerCase() === wanted) ?? found[0];
+        if (active && match) setPlaces([match]);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
   }, [prefillDestination]);
 
   useEffect(() => {
@@ -135,9 +146,10 @@ export default function CreateScreen() {
     });
   };
 
-  const createAndAttachTrip = async (tripDestination: string) => {
+  const createAndAttachTrip = async (tripDestination: string, tripPlaces: TripPlace[] = []) => {
     const tripId = await createTrip({
       destination: tripDestination,
+      places: tripPlaces,
       days: tripDays,
       vibes: selectedVibes,
       budget: budget.toLowerCase() || "midrange",
@@ -196,7 +208,7 @@ export default function CreateScreen() {
   };
 
   const handleNext = async () => {
-    if (!destination.trim()) { setError("Enter a destination."); return; }
+    if (places.length === 0) { setError("Search for a place and pick it from the list."); return; }
     const validationError = validateTripDates();
     if (validationError) { setError(validationError); return; }
     if (!user) { setError("You must be signed in to create a trip."); return; }
@@ -204,7 +216,7 @@ export default function CreateScreen() {
     setLoading(true);
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      const tripId = await createAndAttachTrip(destination.trim());
+      const tripId = await createAndAttachTrip(destinationFromPlaces(places), places);
       router.push(`/trip/${tripId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -247,16 +259,12 @@ export default function CreateScreen() {
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>Where to?</Text>
-            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name="search" size={18} color={colors.mutedForeground} />
-              <TextInput
-                style={[styles.input, { color: colors.foreground }]}
-                placeholder="Search destinations or anywhere"
-                placeholderTextColor={colors.mutedForeground}
-                value={destination}
-                onChangeText={setDestination}
-              />
-            </View>
+            <Text style={[styles.dateHint, { color: colors.mutedForeground }]}>Add every place you're going. The plan stays inside them.</Text>
+            <PlacePicker
+              places={places}
+              onChange={(next) => { setPlaces(next); setError(""); }}
+              placeholder="Search a country, city or town"
+            />
             <Pressable
               onPress={handleHelpDecide}
               disabled={loading}
