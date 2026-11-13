@@ -201,8 +201,13 @@ export const deleteAccount = async (password?: string) => {
 
   const recent = await isSessionRecent(currentUser);
 
+  // Only email/password accounts can confirm with a password. Apple and Google
+  // accounts (and Apple's custom-token sign-in, which has no provider entry)
+  // have an email but no Packyo password, so they must sign in again instead.
+  const usesPassword = currentUser.providerData.some((p) => p.providerId === "password");
+
   if (!recent) {
-    if (currentUser.email) {
+    if (usesPassword && currentUser.email) {
       if (!password) {
         const needsPassword = new Error("Password required to confirm deletion");
         (needsPassword as any).code = "auth/needs-password";
@@ -211,7 +216,11 @@ export const deleteAccount = async (password?: string) => {
       const credential = EmailAuthProvider.credential(currentUser.email, password);
       await reauthenticateWithCredential(currentUser, credential);
     } else {
-      const recentLoginRequired = new Error("Please start a new guest session before deleting it");
+      const recentLoginRequired = new Error(
+        currentUser.isAnonymous
+          ? "Please start a new guest session before deleting it"
+          : "Please sign out and sign back in, then delete your account",
+      );
       (recentLoginRequired as any).code = "auth/requires-recent-login";
       throw recentLoginRequired;
     }

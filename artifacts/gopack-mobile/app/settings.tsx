@@ -431,7 +431,7 @@ export default function SettingsScreen() {
       } else if (error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
         setDeleteError("That password didn't work. Try again or sign in again before deleting.");
       } else if (error?.code === "auth/requires-recent-login") {
-        setDeleteError("Please sign in again, then return here to delete your account.");
+        setDeleteError("For your security, sign out and sign back in, then delete your account within a few minutes.");
       } else {
         setDeleteError(
           "We couldn't finish deleting your account. Please retry while signed in; Packyo will safely resume the deletion.",
@@ -840,7 +840,7 @@ export default function SettingsScreen() {
             {deletingAccount ? "Deleting account…" : "Permanently delete account"}
           </Text>
         </Pressable>
-        {user?.email ? (
+        {user?.providerData?.some((p) => p.providerId === "password") ? (
           <TextInput
             value={deletePassword}
             onChangeText={setDeletePassword}
@@ -852,7 +852,9 @@ export default function SettingsScreen() {
           />
         ) : null}
         <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
-          We may ask for your password before deletion to protect your account.
+          {user?.providerData?.some((p) => p.providerId === "password")
+            ? "We may ask for your password before deletion to protect your account."
+            : "For your security, you may need to sign out and sign back in right before deleting."}
         </Text>
         {deleteError ? <Text style={[styles.errorText, { color: colors.destructive }]}>{deleteError}</Text> : null}
       </Sheet>
