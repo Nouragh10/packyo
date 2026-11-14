@@ -70,7 +70,8 @@ export function parseAutocomplete(body: unknown): TripPlace[] {
       country: kind === "country" ? name : parts[parts.length - 1] ?? "",
       countryCode: "",
       region: kind === "country" || kind === "region" ? undefined : parts.length > 1 ? parts[0] : undefined,
-      label: p.text?.text ?? (secondary ? `${name}, ${secondary}` : name),
+      // Google's full text can drop commas ("Umluj Saudi Arabia"), so build our own.
+      label: secondary ? `${name}, ${secondary}` : name,
       lat: 0,
       lng: 0,
       pending: true,

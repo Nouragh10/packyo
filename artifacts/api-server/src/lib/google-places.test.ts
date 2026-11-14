@@ -17,6 +17,7 @@ test("autocomplete suggestions become pending places", () => {
   assert.equal(places[0].id, "g:ChIJumluj123");
   assert.equal(places[0].pending, true);
   assert.equal(places[0].country, "Saudi Arabia");
+  assert.equal(places[0].label, "Umluj, Saudi Arabia");
   assert.equal(places[1].kind, "country");
 });
 
