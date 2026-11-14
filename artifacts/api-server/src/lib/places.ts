@@ -10,6 +10,7 @@
 // komoot's public server) with Open-Meteo's GeoNames geocoder as a fallback.
 
 import { haversineKm } from "./itinerary-geo";
+import { logger } from "./logger";
 import { googleAutocomplete, googleKey, googlePlaceDetails, googleTextSearch, replacementQuery, type GoogleVenue } from "./google-places";
 
 export type PlaceKind = "country" | "region" | "city" | "town" | "area";
@@ -146,6 +147,12 @@ function dedupe(places: TripPlace[]): TripPlace[] {
 /* ── Search ──────────────────────────────────────────────────────────── */
 
 const cache = new Map<string, { at: number; places: TripPlace[] }>();
+
+/** Whether the last search used Google: "off" (no key), "error" (Google refused), "ok". */
+export let lastGoogleStatus: "off" | "error" | "ok" = "off";
+export function googleStatus(): "off" | "error" | "ok" {
+  return googleKey() ? lastGoogleStatus : "off";
+}
 const CACHE_MS = 24 * 60 * 60 * 1000;
 
 async function getJson(url: string, fetchImpl: Fetch, timeoutMs: number): Promise<unknown> {
@@ -166,7 +173,14 @@ export async function searchPlaces(query: string, fetchImpl: Fetch = fetch, limi
   if (gKey) {
     try {
       places = await googleAutocomplete(q, gKey, session, fetchImpl);
-    } catch { /* fall back to OpenStreetMap */ }
+      lastGoogleStatus = "ok";
+    } catch (err) {
+      // Fall back to OpenStreetMap, but say why (bad key, billing off, API not enabled…).
+      lastGoogleStatus = "error";
+      logger.warn({ err: err instanceof Error ? err.message : String(err) }, "Google Places search failed; using OpenStreetMap");
+    }
+  } else {
+    lastGoogleStatus = "off";
   }
   if (places.length === 0) {
     try {
@@ -179,7 +193,8 @@ export async function searchPlaces(query: string, fetchImpl: Fetch = fetch, limi
     } catch { /* nothing found */ }
   }
   places = dedupe(places).slice(0, 8);
-  if (places.length > 0) {
+  // Don't remember fallback results while Google is failing, so a fixed key works at once.
+  if (places.length > 0 && !(gKey && lastGoogleStatus === "error")) {
     if (cache.size > 2000) cache.delete(cache.keys().next().value as string);
     cache.set(key, { at: Date.now(), places });
   }

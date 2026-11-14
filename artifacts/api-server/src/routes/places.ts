@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { placeDetails, searchPlaces } from "../lib/places";
+import { googleStatus, placeDetails, searchPlaces } from "../lib/places";
 import { validSession } from "../lib/google-places";
 import { logger } from "../lib/logger";
 
@@ -28,7 +28,9 @@ router.get("/places/search", async (req, res) => {
   if (!allow(client)) { res.status(429).json({ error: "Too many searches. Try again in a minute." }); return; }
   try {
     res.set("Cache-Control", "public, max-age=3600");
-    res.json({ places: await searchPlaces(q, fetch, 8, validSession(req.query.session)) });
+    const places = await searchPlaces(q, fetch, 8, validSession(req.query.session));
+    // "google": off = no GOOGLE_PLACES_API_KEY, error = Google refused (see logs), ok = in use.
+    res.json({ places, google: googleStatus() });
   } catch (err) {
     logger.warn({ err }, "place search failed");
     res.status(502).json({ error: "Place search is unavailable right now." });
